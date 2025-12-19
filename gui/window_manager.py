@@ -35,6 +35,10 @@ class WindowManager:
                         'height': self.window_settings.get('height', 750)
                     }
 
+                # Load app key early if it exists
+                if 'app_key' in settings:
+                    self.main_window.app_key_var.set(settings.get('app_key', ''))
+
         except Exception as e:
             print(f"Warning: Could not load initial settings: {e}")
 
@@ -80,8 +84,27 @@ class WindowManager:
     def save_settings(self):
         """Save all settings to file"""
         try:
-            # Save current window settings (only if not in compact mode)
-            if not self.main_window.compact_mode:
+            # Check if compact_mode exists before accessing it
+            if hasattr(self.main_window, 'compact_mode'):
+                # Save current window settings (only if not in compact mode)
+                if not self.main_window.compact_mode:
+                    try:
+                        self.main_window.root.update_idletasks()
+                        self.window_settings = {
+                            'width': self.main_window.root.winfo_width(),
+                            'height': self.main_window.root.winfo_height(),
+                            'x': self.main_window.root.winfo_x(),
+                            'y': self.main_window.root.winfo_y()
+                        }
+                        # Update original size
+                        self.original_size = {
+                            'width': self.window_settings['width'],
+                            'height': self.window_settings['height']
+                        }
+                    except:
+                        pass
+            else:
+                # If compact_mode doesn't exist yet, save current window settings
                 try:
                     self.main_window.root.update_idletasks()
                     self.window_settings = {
@@ -90,16 +113,13 @@ class WindowManager:
                         'x': self.main_window.root.winfo_x(),
                         'y': self.main_window.root.winfo_y()
                     }
-                    # Update original size
-                    self.original_size = {
-                        'width': self.window_settings['width'],
-                        'height': self.window_settings['height']
-                    }
                 except:
                     pass
 
-            # Get settings from tabs
-            tab_settings = self.main_window.get_current_settings()
+            # Get settings from tabs if they exist
+            tab_settings = {}
+            if hasattr(self.main_window, 'translation_tab') and hasattr(self.main_window, 'processing_tab'):
+                tab_settings = self.main_window.get_current_settings()
 
             # Add application key to settings
             app_key = ""
@@ -119,7 +139,11 @@ class WindowManager:
                 json.dump(all_settings, f, indent=2)
 
         except Exception as e:
-            self.main_window.log_message(f"Warning: Could not save settings: {e}")
+            # Only log if main_window has log_message method
+            if hasattr(self.main_window, 'log_message'):
+                self.main_window.log_message(f"Warning: Could not save settings: {e}")
+            else:
+                print(f"Warning: Could not save settings: {e}")
 
     def load_settings(self):
         """Load settings from file"""

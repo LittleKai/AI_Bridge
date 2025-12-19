@@ -25,10 +25,16 @@ class AITranslationBridgeGUI:
         # Initialize variables
         self.init_variables()
 
+        # Compact mode flag - Initialize early
+        self.compact_mode = False
+
+        # Store app key variable - Initialize early
+        self.app_key_var = tk.StringVar(value="")
+
         # Initialize managers
         self.window_manager = WindowManager(self)
 
-        # Load initial settings
+        # Load initial settings (including app_key)
         self.window_manager.load_initial_settings()
 
         # Setup GUI
@@ -37,14 +43,8 @@ class AITranslationBridgeGUI:
         # Setup events
         self.setup_events()
 
-        # Check key validation
+        # Check key validation after loading settings
         self.check_key_validation()
-
-        # Compact mode flag
-        self.compact_mode = False
-
-        # Store app key variable
-        self.app_key_var = tk.StringVar(value="")
 
     def init_variables(self):
         """Initialize all GUI variables"""
@@ -179,6 +179,49 @@ class AITranslationBridgeGUI:
             if self.compact_mode:
                 self.toggle_compact_mode()
 
+    def calculate_compact_height(self):
+        """Calculate the required height for compact mode"""
+        # Force update to get accurate measurements
+        self.root.update_idletasks()
+
+        total_height = 0
+
+        # Get main container padding
+        main_padding = 20  # Top and bottom padding of main_container
+
+        # Get each visible section's height
+        sections = [
+            (self.status_section.frame, 1),     # row 1
+            (None, 3),                           # row 3 - control buttons
+            (self.log_section.frame, 4)         # row 4
+        ]
+
+        for widget, row in sections:
+            if widget is None:
+                # Get control frame from row 3
+                control_widgets = self.main_frame.grid_slaves(row=row)
+                if control_widgets:
+                    widget = control_widgets[0]
+
+            if widget and widget.winfo_exists():
+                # Get widget height
+                widget_height = widget.winfo_reqheight()
+                total_height += widget_height
+
+                # Get pady from grid info
+                grid_info = widget.grid_info()
+                if 'pady' in grid_info:
+                    pady = grid_info['pady']
+                    if isinstance(pady, tuple):
+                        total_height += pady[0] + pady[1]
+                    else:
+                        total_height += pady * 2
+
+        # Add main container padding and some buffer
+        total_height += main_padding + 30
+
+        return total_height
+
     def toggle_compact_mode(self):
         """Toggle compact mode"""
         self.compact_mode = not self.compact_mode
@@ -195,15 +238,20 @@ class AITranslationBridgeGUI:
             # Keep window on top
             self.root.attributes('-topmost', True)
 
-            # Calculate compact height based on visible content
+            # Force update before calculating
             self.root.update_idletasks()
 
-            # Keep original width, adjust height
+            # Calculate required height
+            compact_height = self.calculate_compact_height()
+
+            # Keep original width
             compact_width = self.window_manager.original_size['width']
-            compact_height = 400  # Adjust based on content
 
             # Set compact size while maintaining position
             self.root.geometry(f"{compact_width}x{compact_height}+{current_x}+{current_y}")
+
+            # Force minimum size for compact mode
+            self.root.minsize(compact_width, compact_height)
 
         else:
             # Show header and tabs
@@ -216,7 +264,16 @@ class AITranslationBridgeGUI:
             # Restore original size while maintaining position
             width = self.window_manager.original_size['width']
             height = self.window_manager.original_size['height']
+
+            # Restore original minimum size
+            self.root.minsize(500, 750)
+
+            # Set geometry
             self.root.geometry(f"{width}x{height}+{current_x}+{current_y}")
+
+            # Force update
+            self.root.update_idletasks()
+
 
     def check_key_validation(self):
         """Check key validation status"""
@@ -284,8 +341,5 @@ class AITranslationBridgeGUI:
         """Start the GUI application"""
         self.log_message("AI Translation Bridge initialized.")
         self.log_message("Press Shift+F1 to start, Shift+F3 to stop.")
-
-        # Load settings including app key
-        self.window_manager.load_settings()
 
         self.root.mainloop()

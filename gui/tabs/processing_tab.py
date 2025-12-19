@@ -83,7 +83,7 @@ class ProcessingTab:
         batch_entry = ttk.Entry(batch_frame, textvariable=self.batch_size, width=10)
         batch_entry.grid(row=0, column=1, sticky=tk.W)
 
-        ttk.Label(batch_frame, text="(Number of items to process at once)",
+        ttk.Label(batch_frame, text="(Number of csv lines to process at once)",
                   font=("Arial", 9), foreground="gray").grid(row=0, column=2, sticky=tk.W, padx=(10, 0))
 
     def create_prompt_section(self, parent, row):

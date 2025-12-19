@@ -13,9 +13,9 @@
     "output_directory": "C:\\Users\\XEON\\Documents\\AIBridge"
   },
   "processing": {
-    "batch_size": "10",
+    "batch_size": "50",
     "prompt_type": "acc",
-    "ai_service": "Gemini"
+    "ai_service": "Perplexity"
   },
   "app_key": "mzcnpXkEwW"
 }
