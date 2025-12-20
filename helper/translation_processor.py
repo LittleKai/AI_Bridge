@@ -284,7 +284,7 @@ class TranslationProcessor:
                 for (idx, row), translation in zip(batch.iterrows(), translations):
                     results.append({
                         'id': row['id'],
-                        'cn': row['text'],
+                        'raw': row['text'],
                         'edit': translation,
                         'status': 'completed' if translation else 'failed'
                     })
@@ -294,7 +294,7 @@ class TranslationProcessor:
                 for idx, row in batch.iterrows():
                     results.append({
                         'id': row['id'],
-                        'cn': row['text'],
+                        'raw': row['text'],
                         'edit': '',
                         'status': 'failed'
                     })

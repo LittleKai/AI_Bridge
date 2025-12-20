@@ -9,7 +9,7 @@ import zipfile
 import xml.etree.ElementTree as ET
 from urllib.parse import unquote
 import html
-
+import re
 
 def natural_sort_key(s):
     """
@@ -290,16 +290,20 @@ def process_folder_to_csv(folder_path, language, ruby_handling=None, log_callbac
 
 def read_epub_content(file_path, ruby_handling=None):
     """
-    Read EPUB file content with ruby handling support
+    Read EPUB file content with advanced HTML processing and image position tracking
     """
     try:
         paragraphs = []
+
         with zipfile.ZipFile(file_path, 'r') as epub_zip:
             file_list = epub_zip.namelist()
+
             opf_path = parse_container_xml(epub_zip)
+
             if opf_path:
                 ordered_files = parse_opf_spine(epub_zip, opf_path)
                 html_files = []
+
                 for file_path_in_epub in ordered_files:
                     candidates = [
                         file_path_in_epub,
@@ -307,6 +311,7 @@ def read_epub_content(file_path, ruby_handling=None):
                         file_path_in_epub.replace('/', os.sep),
                         os.path.basename(file_path_in_epub)
                     ]
+
                     for candidate in candidates:
                         if candidate in file_list:
                             html_files.append(candidate)
@@ -318,31 +323,28 @@ def read_epub_content(file_path, ruby_handling=None):
                                 html_files.append(f)
                                 break
             else:
-                html_files = [f for f in file_list if f.endswith(('.html', '.xhtml', '.htm'))
+                html_files = [f for f in file_list
+                              if f.endswith(('.html', '.xhtml', '.htm'))
                               and not f.startswith('__MACOSX')]
                 html_files.sort(key=natural_sort_key)
 
             for html_file in html_files:
                 try:
                     content = epub_zip.read(html_file)
+
                     if isinstance(content, bytes):
                         content = content.decode('utf-8', errors='replace')
 
-                    if ruby_handling:
-                        content = process_ruby_tags(content, ruby_handling)
+                    extracted_lines = extract_content_from_html(content, ruby_handling)
+                    paragraphs.extend(extracted_lines)
 
-                    lines = content.split('\n')
-                    for line in lines:
-                        cleaned = clean_html_text(line)
-                        if cleaned:
-                            paragraphs.append(cleaned)
                 except Exception:
                     continue
 
         return paragraphs
+
     except Exception:
         return []
-
 
 #  hàm xử lý ruby tags
 def process_ruby_tags(content, ruby_handling):
@@ -376,3 +378,219 @@ def is_hiragana(text):
     Check if text is hiragana
     """
     return bool(re.match(r'^[\u3040-\u309F]+$', text))
+
+def is_hiragana(text):
+    """
+    Check if text is hiragana
+    """
+    return bool(re.match(r'^[\u3040-\u309F]+$', text))
+
+def is_katakana(text):
+    """
+    Check if text is katakana
+    """
+    return bool(re.match(r'^[\u30A0-\u30FF]+$', text))
+
+def is_css_content(text):
+    """
+    Check if text is CSS/style content
+    """
+    css_patterns = [
+        r'^\s*[a-zA-Z#\.\[\]]+\s*\{\s*[^}]*\}\s*$',
+        r'^\s*[a-zA-Z\-]+\s*:\s*[^;]+;\s*$',
+        r'^\s*@[a-zA-Z\-]+\s*[^{]*\{\s*[^}]*\}\s*$',
+        r'^\s*[a-zA-Z\-]+\s*:\s*[^;]+\s*$',
+        r'.*\{\s*(padding|margin|text-align|display|list-style)[^}]*\}',
+    ]
+
+    for pattern in css_patterns:
+        if re.search(pattern, text, re.IGNORECASE):
+            return True
+
+    css_keywords = ['padding', 'margin', 'text-align', 'display', 'font-size',
+                    'color', 'background', 'border', 'width', 'height', 'position',
+                    'float', 'clear', 'list-style-type', 'nav#landmarks']
+
+    for keyword in css_keywords:
+        if keyword in text.lower() and ':' in text:
+            return True
+
+    return False
+
+def decode_html_entities(text):
+    """
+    Decode HTML entities to Unicode characters
+    """
+    decoded = html.unescape(text)
+
+    pattern = r'&#x([0-9A-Fa-f]{4,6});'
+    def replace_entity(match):
+        try:
+            return chr(int(match.group(1), 16))
+        except:
+            return match.group(0)
+
+    decoded = re.sub(pattern, replace_entity, decoded)
+    return decoded
+
+def process_ruby_tags(content, ruby_handling):
+    """
+    Process ruby tags based on handling mode with complex ruby support
+    """
+    if ruby_handling == 'remove_all':
+        content = re.sub(r'<ruby>(.*?)</ruby>', r'\1', content, flags=re.DOTALL)
+        content = re.sub(r'<r[ubt]>', '', content)
+
+    elif ruby_handling == 'remove_hiragana':
+        def replace_complex_ruby(match):
+            ruby_content = match.group(1)
+            rb_rt_pairs = re.findall(r'<rb>(.*?)</rb>\s*<rt>(.*?)</rt>', ruby_content, re.DOTALL)
+
+            if rb_rt_pairs:
+                result_parts = []
+                for rb_text, rt_text in rb_rt_pairs:
+                    rb_text = rb_text.strip()
+                    rt_text = rt_text.strip()
+
+                    if rt_text and is_hiragana(rt_text):
+                        result_parts.append(rb_text)
+                    elif rt_text:
+                        result_parts.append(f"{rb_text}({rt_text})")
+                    else:
+                        result_parts.append(rb_text)
+
+                return ''.join(result_parts)
+            else:
+                base_match = re.search(r'<rb>(.*?)</rb>', ruby_content, re.DOTALL)
+                rt_match = re.search(r'<rt>(.*?)</rt>', ruby_content, re.DOTALL)
+
+                if base_match:
+                    base_text = base_match.group(1).strip()
+                    if rt_match:
+                        rt_text = rt_match.group(1).strip()
+                        if rt_text and is_hiragana(rt_text):
+                            return base_text
+                        else:
+                            return f"{base_text}({rt_text})" if rt_text else base_text
+                    return base_text
+
+                return ruby_content
+
+        content = re.sub(r'<ruby>(.*?)</ruby>', replace_complex_ruby, content, flags=re.DOTALL)
+
+        def replace_simple_ruby(match):
+            full_content = match.group(0)
+            base_text = match.group(1).strip()
+            rt_text = match.group(2).strip()
+
+            if not rt_text:
+                return base_text
+
+            if is_hiragana(rt_text):
+                return base_text
+            else:
+                return f"{base_text}({rt_text})"
+
+        content = re.sub(r'<ruby>([^<]+)<rt>([^<]*)</rt></ruby>', replace_simple_ruby, content)
+        content = re.sub(r'<r[ubt]>', '', content)
+
+    elif ruby_handling == 'keep_all':
+        def replace_ruby_keep_all(match):
+            ruby_content = match.group(1)
+
+            rb_rt_pairs = re.findall(r'<rb>(.*?)</rb>\s*<rt>(.*?)</rt>', ruby_content, re.DOTALL)
+
+            if rb_rt_pairs:
+                result_parts = []
+                for rb_text, rt_text in rb_rt_pairs:
+                    rb_text = rb_text.strip()
+                    rt_text = rt_text.strip()
+                    if rt_text:
+                        result_parts.append(f"{rb_text}({rt_text})")
+                    else:
+                        result_parts.append(rb_text)
+                return ''.join(result_parts)
+            else:
+                base_match = re.search(r'<rb>(.*?)</rb>', ruby_content, re.DOTALL)
+                rt_match = re.search(r'<rt>(.*?)</rt>', ruby_content, re.DOTALL)
+
+                if base_match:
+                    base_text = base_match.group(1).strip()
+                    if rt_match:
+                        rt_text = rt_match.group(1).strip()
+                        return f"{base_text}({rt_text})" if rt_text else base_text
+                    return base_text
+
+                return ruby_content
+
+        content = re.sub(r'<ruby>(.*?)</ruby>', replace_ruby_keep_all, content, flags=re.DOTALL)
+
+        def replace_simple_ruby_keep(match):
+            base_text = match.group(1).strip()
+            rt_text = match.group(2).strip()
+            return f"{base_text}({rt_text})" if rt_text else base_text
+
+        content = re.sub(r'<ruby>([^<]+)<rt>([^<]*)</rt></ruby>', replace_simple_ruby_keep, content)
+        content = re.sub(r'<r[ubt]>', '', content)
+
+    return content
+
+def extract_content_from_html(content, ruby_handling=None):
+    """
+    Extract content from HTML with advanced processing including image positions
+    """
+    if isinstance(content, bytes):
+        try:
+            content = content.decode('utf-8')
+        except UnicodeDecodeError:
+            content = content.decode('utf-8', errors='replace')
+
+    if ruby_handling:
+        content = process_ruby_tags(content, ruby_handling)
+
+    result = []
+
+    content = re.sub(r'<br\s*/?>', '\n', content, flags=re.IGNORECASE)
+    content = re.sub(r'</p>\s*<p[^>]*>', '\n', content, flags=re.IGNORECASE)
+    content = re.sub(r'</div>\s*<div[^>]*>', '\n', content, flags=re.IGNORECASE)
+
+    content = re.sub(r'<style[^>]*>.*?</style>', '', content, flags=re.DOTALL | re.IGNORECASE)
+    content = re.sub(r'<script[^>]*>.*?</script>', '', content, flags=re.DOTALL | re.IGNORECASE)
+
+    img_pattern = r'<img[^>]*>'
+    img_matches = list(re.finditer(img_pattern, content, re.IGNORECASE))
+
+    if img_matches:
+        last_pos = 0
+        for match in img_matches:
+            before_img = content[last_pos:match.start()]
+            lines = before_img.split('\n')
+            for line in lines:
+                cleaned = re.sub(r'<[^>]+>', '', line)
+                cleaned = decode_html_entities(cleaned)
+                cleaned = cleaned.strip()
+                if cleaned and not is_css_content(cleaned):
+                    result.append(cleaned)
+
+            result.append("(img)")
+
+            last_pos = match.end()
+
+        after_last_img = content[last_pos:]
+        lines = after_last_img.split('\n')
+        for line in lines:
+            cleaned = re.sub(r'<[^>]+>', '', line)
+            cleaned = decode_html_entities(cleaned)
+            cleaned = cleaned.strip()
+            if cleaned and not is_css_content(cleaned):
+                result.append(cleaned)
+    else:
+        lines = content.split('\n')
+        for line in lines:
+            cleaned = re.sub(r'<[^>]+>', '', line)
+            cleaned = decode_html_entities(cleaned)
+            cleaned = cleaned.strip()
+            if cleaned and not is_css_content(cleaned):
+                result.append(cleaned)
+
+    return result

@@ -79,6 +79,7 @@ class ConverterTab:
             ("Remove All", "remove_all"),
             ("Remove Hiragana Only", "remove_hiragana")
         ]
+
         self.ruby_combo = ttk.Combobox(
             lang_frame,
             textvariable=self.ruby_handling_var,
