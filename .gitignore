@@ -1,15 +1,8 @@
 build_script.py
-debug_rest_fail.png
-UmaAutoTrain_Package.rar
-Uma_Musume_Auto_Train_Distribution.rar
-Uma_Musume_Auto_Train.rar
-simple_uma.spec
-uma_auto.spec
 pass_link.txt
 window_settings.json
-assets/event_map/cached_database.json
-assets/event_map/config_hash.txt
 AI_Bridge.iml
+.key_store
 
 # Ignore specific folders
 0.temp/
@@ -18,8 +11,5 @@ venv/
 __pycache__/
 **/__pycache__/
 .idea/
-UmaAutoTrain_Package/
-Uma_Musume_Auto_Train/
-Uma_Musume_Auto_Train_Distribution/
 dist/
 build/

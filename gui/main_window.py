@@ -161,10 +161,74 @@ class AITranslationBridgeGUI:
         except Exception as e:
             self.log_message(f"Warning: Could not setup keyboard shortcuts: {e}")
 
+    def update_progress_display(self):
+        """Update progress display based on current input file and running status"""
+        try:
+            # Get translation settings
+            translation_settings = self.translation_tab.get_settings()
+            input_file = translation_settings.get('input_file')
+
+            if not input_file or not os.path.exists(input_file):
+                # No input file or file doesn't exist
+                self.status_section.set_progress(0, 0, self.is_running)
+                return
+
+            # Read input file to get total count
+            import pandas as pd
+            try:
+                df = pd.read_csv(input_file)
+
+                # Filter by ID range if specified
+                start_id = translation_settings.get('start_id', '')
+                stop_id = translation_settings.get('stop_id', '')
+
+                if start_id:
+                    try:
+                        start_id = int(start_id)
+                        df = df[df['id'] >= start_id]
+                    except:
+                        pass
+
+                if stop_id:
+                    try:
+                        stop_id = int(stop_id)
+                        df = df[df['id'] <= stop_id]
+                    except:
+                        pass
+
+                total_rows = len(df)
+
+                # Check if output file exists to get processed count
+                processing_settings = self.processing_tab.get_settings()
+                output_path = self.translation_processor.generate_output_path(
+                    input_file,
+                    processing_settings.get('prompt_type')
+                )
+
+                processed_rows = 0
+                if os.path.exists(output_path):
+                    try:
+                        output_df = pd.read_csv(output_path)
+                        processed_rows = len(output_df)
+                    except:
+                        pass
+
+                # Update progress display with running status
+                self.status_section.set_progress(processed_rows, total_rows, self.is_running)
+
+            except Exception as e:
+                self.status_section.set_progress(0, 0, self.is_running)
+
+        except Exception as e:
+            self.status_section.set_progress(0, 0, self.is_running)
+
     def start_bot(self):
         """Start bot based on selected service type"""
         if not self.is_running and self.key_valid:
             self.is_running = True
+
+            # Update progress display with running status
+            self.update_progress_display()
 
             # Get selected service
             processing_settings = self.processing_tab.get_settings()
@@ -181,7 +245,6 @@ class AITranslationBridgeGUI:
             # Check if it's an API service or web interface service
             if "API" in ai_service:
                 # API mode - use translation processor
-                self.status_section.set_bot_status("Processing...", "green")
                 self.translation_processor.is_running = True
 
                 # Start translation processing in a separate thread
@@ -192,7 +255,6 @@ class AITranslationBridgeGUI:
                 processing_thread.start()
             else:
                 # Web interface mode - use bot controller
-                self.status_section.set_bot_status("Running Web Bot", "green")
                 self.bot_controller.running = True
 
                 # Start bot controller for web interface
@@ -214,7 +276,10 @@ class AITranslationBridgeGUI:
 
             self.start_button.config(state="normal")
             self.stop_button.config(state="disabled")
-            self.status_section.set_bot_status("Stopped", "red")
+
+            # Update progress display with stopped status
+            self.update_progress_display()
+
             self.log_message("Bot stopped")
 
             # Exit compact mode

@@ -48,34 +48,60 @@ class KeyEncryption:
         key = base64.urlsafe_b64encode(kdf.derive(machine_id.encode()))
         return key
     
+    def encrypt_keys_list(self, keys_list):
+        """Encrypt a list of API keys"""
+        if not keys_list:
+            return []
+        encrypted_list = []
+        for key in keys_list:
+            if key:  # Only encrypt non-empty keys
+                encrypted = self.encrypt_key(key)
+                encrypted_list.append(encrypted)
+        return encrypted_list
+
+    def decrypt_keys_list(self, encrypted_list):
+        """Decrypt a list of API keys"""
+        if not encrypted_list:
+            return []
+        decrypted_list = []
+        for encrypted_key in encrypted_list:
+            if encrypted_key:  # Only decrypt non-empty keys
+                decrypted = self.decrypt_key(encrypted_key)
+                decrypted_list.append(decrypted)
+        return decrypted_list
+
     def encrypt_key(self, api_key):
         """Encrypt a single API key"""
         if not api_key:
             return ""
         try:
+            # Check if already encrypted (base64 pattern)
+            try:
+                base64.urlsafe_b64decode(api_key.encode())
+                # If successful decode, might be already encrypted
+                return api_key
+            except:
+                pass
+
+            # Encrypt the key
             encrypted = self.cipher.encrypt(api_key.encode())
             return base64.urlsafe_b64encode(encrypted).decode()
-        except Exception:
+        except Exception as e:
+            print(f"Encryption error: {e}")
             return api_key  # Return original if encryption fails
-    
+
     def decrypt_key(self, encrypted_key):
         """Decrypt a single API key"""
         if not encrypted_key:
             return ""
         try:
+            # Try to decrypt
             decoded = base64.urlsafe_b64decode(encrypted_key.encode())
             decrypted = self.cipher.decrypt(decoded)
             return decrypted.decode()
         except Exception:
+            # If decryption fails, might not be encrypted
             return encrypted_key  # Return as-is if not encrypted
-    
-    def encrypt_keys_list(self, keys_list):
-        """Encrypt a list of API keys"""
-        return [self.encrypt_key(key) for key in keys_list]
-    
-    def decrypt_keys_list(self, encrypted_list):
-        """Decrypt a list of API keys"""
-        return [self.decrypt_key(key) for key in encrypted_list]
     
     def mask_key_for_display(self, api_key):
         """Mask API key for display (show first 6 and last 4 characters)"""

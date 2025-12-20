@@ -41,6 +41,12 @@ class TranslationTab:
         for var in variables:
             var.trace('w', lambda *args: self.main_window.save_settings())
 
+        # Add progress update triggers
+        self.start_id.trace('w', lambda *args: self.main_window.update_progress_display())
+        self.stop_id.trace('w', lambda *args: self.main_window.update_progress_display())
+        self.input_file.trace('w', lambda *args: self.main_window.update_progress_display())
+
+
     def create_content(self):
         """Create tab content"""
         content_frame = ttk.Frame(self.parent, padding="15")
@@ -97,17 +103,6 @@ class TranslationTab:
         output_frame.grid(row=row, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=(0, 10))
         output_frame.columnconfigure(1, weight=1)
 
-        # Info about automatic output naming
-        info_text = "Output file will be automatically named based on:\n" \
-                    "• Input filename\n" \
-                    "• Detected language (from filename)\n" \
-                    "• Selected prompt type\n" \
-                    "Format: [filename]_[LANG]_[prompt]_translated.csv"
-
-        info_label = ttk.Label(output_frame, text=info_text,
-                               font=("Arial", 9), foreground="gray", justify=tk.LEFT)
-        info_label.grid(row=0, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=(0, 5))
-
         # Default directory info
         ttk.Label(output_frame, text="Output directory:",
                   font=("Arial", 9, "bold")).grid(row=1, column=0, sticky=tk.W, pady=(5, 0))
@@ -150,6 +145,9 @@ class TranslationTab:
             lang = self.detect_language(filename)
             if lang:
                 self.main_window.log_message(f"Detected language: {lang}")
+
+            # Update progress display when file is selected
+            self.main_window.update_progress_display()
 
     def detect_language(self, filepath):
         """Detect language from filename"""

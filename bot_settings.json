@@ -1,19 +1,19 @@
 {
   "window": {
     "width": 500,
-    "height": 750,
-    "x": 1379,
-    "y": 0
+    "height": 800,
+    "x": 1316,
+    "y": 8
   },
   "translation": {
-    "input_file": "D:/Downloads/Natsuzora-to-eien_JP.csv",
+    "input_file": "C:/Users/XEON/Documents/AIBridge/Vol_6_a_JP.csv",
     "output_file": "",
     "start_id": "1",
-    "stop_id": "1000",
+    "stop_id": "100000",
     "output_directory": "C:\\Users\\XEON\\Documents\\AIBridge"
   },
   "processing": {
-    "batch_size": "30",
+    "batch_size": "50",
     "prompt_type": "acc",
     "ai_service": "Gemini API",
     "ai_model": "gemini-2.5-flash-lite",
@@ -54,6 +54,10 @@
         "top_k": 40
       }
     }
+  },
+  "converter": {
+    "input_path": "",
+    "language": "EN"
   },
   "app_key": "mzcnpXkEwW"
 }

@@ -24,20 +24,19 @@ class StatusSection:
         self.create_right_column()
 
     def create_left_column(self):
-        """Create left column with bot status, date, and energy"""
+        """Create left column with progress"""
         left_column = ttk.Frame(self.frame)
         left_column.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N), padx=(0, 10))
         left_column.columnconfigure(1, weight=1)
 
-        # Bot Status
-        ttk.Label(left_column, text="Bot Status:", font=("Arial", 10, "bold")).grid(
+        # Progress
+        ttk.Label(left_column, text="Progress:", font=("Arial", 10, "bold")).grid(
             row=0, column=0, sticky=tk.W, pady=3)
-        self.status_label = ttk.Label(left_column, text="Stopped", foreground="red")
-        self.status_label.grid(row=0, column=1, sticky=tk.W, padx=(10, 0), pady=3)
-
+        self.progress_label = ttk.Label(left_column, text="0/0", foreground="red")
+        self.progress_label.grid(row=0, column=1, sticky=tk.W, padx=(10, 0), pady=3)
 
     def create_right_column(self):
-        """Create right column with game window and key status"""
+        """Create right column with key status"""
         right_column = ttk.Frame(self.frame)
         right_column.grid(row=0, column=1, sticky=(tk.W, tk.E, tk.N))
         right_column.columnconfigure(1, weight=1)
@@ -49,8 +48,21 @@ class StatusSection:
         self.key_status_label.grid(row=0, column=1, sticky=tk.W, padx=(10, 0), pady=3)
 
     def set_bot_status(self, status, color):
-        """Update bot status display"""
-        self.status_label.config(text=status, foreground=color)
+        """Update bot status display - deprecated, kept for compatibility"""
+        pass
+
+    def set_progress(self, current, total, is_running=False):
+        """Update progress display"""
+        if total == 0:
+            self.progress_label.config(text="0/0", foreground="red")
+        else:
+            progress_text = f"{current}/{total}"
+            # Set color based on running status
+            if is_running:
+                color = "green"
+            else:
+                color = "red"
+            self.progress_label.config(text=progress_text, foreground=color)
 
     def update_key_status(self, is_valid, message):
         """Update key validation status display"""

@@ -550,47 +550,21 @@ def extract_content_from_html(content, ruby_handling=None):
 
     result = []
 
+    content = re.sub(r'<style[^>]*>.*?</style>', '', content, flags=re.DOTALL | re.IGNORECASE)
+    content = re.sub(r'<script[^>]*>.*?</script>', '', content, flags=re.DOTALL | re.IGNORECASE)
+
+    content = re.sub(r'<img[^>]*>', '(img)', content, flags=re.IGNORECASE)
+
     content = re.sub(r'<br\s*/?>', '\n', content, flags=re.IGNORECASE)
     content = re.sub(r'</p>\s*<p[^>]*>', '\n', content, flags=re.IGNORECASE)
     content = re.sub(r'</div>\s*<div[^>]*>', '\n', content, flags=re.IGNORECASE)
 
-    content = re.sub(r'<style[^>]*>.*?</style>', '', content, flags=re.DOTALL | re.IGNORECASE)
-    content = re.sub(r'<script[^>]*>.*?</script>', '', content, flags=re.DOTALL | re.IGNORECASE)
-
-    img_pattern = r'<img[^>]*>'
-    img_matches = list(re.finditer(img_pattern, content, re.IGNORECASE))
-
-    if img_matches:
-        last_pos = 0
-        for match in img_matches:
-            before_img = content[last_pos:match.start()]
-            lines = before_img.split('\n')
-            for line in lines:
-                cleaned = re.sub(r'<[^>]+>', '', line)
-                cleaned = decode_html_entities(cleaned)
-                cleaned = cleaned.strip()
-                if cleaned and not is_css_content(cleaned):
-                    result.append(cleaned)
-
-            result.append("(img)")
-
-            last_pos = match.end()
-
-        after_last_img = content[last_pos:]
-        lines = after_last_img.split('\n')
-        for line in lines:
-            cleaned = re.sub(r'<[^>]+>', '', line)
-            cleaned = decode_html_entities(cleaned)
-            cleaned = cleaned.strip()
-            if cleaned and not is_css_content(cleaned):
-                result.append(cleaned)
-    else:
-        lines = content.split('\n')
-        for line in lines:
-            cleaned = re.sub(r'<[^>]+>', '', line)
-            cleaned = decode_html_entities(cleaned)
-            cleaned = cleaned.strip()
-            if cleaned and not is_css_content(cleaned):
-                result.append(cleaned)
+    lines = content.split('\n')
+    for line in lines:
+        cleaned = re.sub(r'<[^>]+>', '', line)
+        cleaned = decode_html_entities(cleaned)
+        cleaned = cleaned.strip()
+        if cleaned and not is_css_content(cleaned):
+            result.append(cleaned)
 
     return result

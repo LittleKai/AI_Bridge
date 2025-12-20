@@ -288,11 +288,11 @@ class APISettingsDialog:
         if self.top_k_var:
             self.config['top_k'] = self.top_k_var.get()
 
-        # Update with actual keys (not masked)
-        self.config['keys'] = self.actual_keys
+        # Update with actual keys (not masked) - store plain keys
+        self.config['keys'] = self.actual_keys.copy()  # Use copy to avoid reference issues
 
         # Update processing tab configuration
-        self.processing_tab.api_configs[self.service_name].update(self.config)
+        self.processing_tab.api_configs[self.service_name] = self.config.copy()  # Use copy here too
 
         # Update selected model
         self.processing_tab.ai_model.set(self.model_var.get())

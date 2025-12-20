@@ -29,13 +29,20 @@ class TranslationProcessor:
         else:
             self.processed_rows = 0
 
-        # Update status display with progress
-        progress_text = f"Progress: {self.processed_rows}/{self.total_input_rows}"
-        self.main_window.status_section.set_bot_status(progress_text, "green")
+        # Update progress display with running status
+        self.main_window.status_section.set_progress(
+            self.processed_rows,
+            self.total_input_rows,
+            self.is_running
+        )
 
     def start_processing(self):
         """Start the translation processing"""
         self.is_running = True
+
+        # Initialize progress tracking
+        self.processed_rows = 0
+        self.total_input_rows = 0
 
         try:
             # Get settings from tabs
@@ -46,11 +53,13 @@ class TranslationProcessor:
             input_file = translation_settings.get('input_file')
             if not input_file:
                 self.main_window.log_message("Error: No input file selected")
+                self.main_window.status_section.set_bot_status("Error: No input file", "red")
                 return
 
             # Check if input file exists
             if not os.path.exists(input_file):
                 self.main_window.log_message(f"Error: Input file does not exist: {input_file}")
+                self.main_window.status_section.set_bot_status("Error: File not found", "red")
                 return
 
             self.main_window.log_message(f"Processing file: {os.path.basename(input_file)}")
@@ -67,6 +76,7 @@ class TranslationProcessor:
             # Check if it's an API service
             if "API" not in ai_service:
                 self.main_window.log_message(f"Error: {ai_service} is not an API service. Use web interface mode instead.")
+                self.main_window.status_section.set_bot_status("Error: Not API service", "red")
                 return
 
             api_config = processing_settings['api_configs'].get(ai_service, {})
@@ -74,7 +84,11 @@ class TranslationProcessor:
 
             if not self.current_api_keys:
                 self.main_window.log_message(f"Error: No API keys configured for {ai_service}")
+                self.main_window.status_section.set_bot_status("Error: No API keys", "red")
                 return
+
+            # Update status to processing
+            self.main_window.status_section.set_bot_status("Initializing...", "orange")
 
             # Process with API
             self.process_with_api(
@@ -95,8 +109,15 @@ class TranslationProcessor:
             self.main_window.log_message(traceback.format_exc())
         finally:
             self.is_running = False
-            # Final progress update
+            # Final progress update with stopped status
             self.update_progress()
+            # Update main window running status
+            self.main_window.root.after(0, self.set_main_window_stopped)
+
+    def set_main_window_stopped(self):
+        """Set main window to stopped state"""
+        self.main_window.is_running = False
+        self.main_window.update_progress_display()
 
     def generate_output_path(self, input_path, prompt_type):
         """Generate output path based on input file name and prompt type"""
@@ -109,7 +130,6 @@ class TranslationProcessor:
         for lang in ['JP', 'EN', 'KR', 'CN', 'VI']:
             if lang in input_filename.upper():
                 lang_folder = lang
-                self.main_window.log_message(f"Detected language from filename: {lang}")
                 break
 
         if not lang_folder:
@@ -252,8 +272,8 @@ class TranslationProcessor:
             batch_ids = batch['id'].tolist()
             self.main_window.log_message(f"Processing batch {batch_num}/{total_batches} (IDs: {batch_ids[0]}-{batch_ids[-1]}, {len(batch)} rows)")
 
-            # Create batch text
-            batch_text = "\n".join([f"{j+1}. {row['text']}" for j, row in enumerate(batch.values)])
+            # Create batch text - FIXED: Use iterrows() instead of values
+            batch_text = "\n".join([f"{j+1}. {row['text']}" for j, (_, row) in enumerate(batch.iterrows())])
 
             # Format prompt
             count_info = f"Source text consists of {len(batch)} numbered lines from 1 to {len(batch)}."
@@ -299,7 +319,7 @@ class TranslationProcessor:
                         'status': 'failed'
                     })
 
-            # Save intermediate results
+            # Save intermediate results and update progress
             if results:
                 results_df = pd.DataFrame(results)
                 results_df_sorted = results_df.sort_values('id')

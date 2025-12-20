@@ -111,8 +111,6 @@ class ConverterTab:
         self.output_frame = ttk.LabelFrame(parent, text="Output", padding=10)
         self.output_frame.pack(fill=tk.X, pady=(0, 10))
 
-        ttk.Label(self.output_frame, text="Output Directory:").pack(anchor=tk.W)
-
         output_dir = str(Path.home() / "Documents" / "AIBridge")
 
         output_display_frame = ttk.Frame(self.output_frame)

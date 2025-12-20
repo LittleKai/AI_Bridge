@@ -116,6 +116,9 @@ class ProcessingTab:
         # Special handler for AI service change
         self.ai_service.trace('w', self.on_ai_service_change)
 
+        # Update progress when prompt type changes (affects output file path)
+        self.prompt_type.trace('w', lambda *args: self.main_window.update_progress_display())
+
     def create_content(self):
         """Create tab content"""
         content_frame = ttk.Frame(self.parent, padding="15")
