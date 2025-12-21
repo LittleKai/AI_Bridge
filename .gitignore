@@ -7,7 +7,7 @@ bot_settings.json
 settings.json
 
 # Ignore specific folders
-0.temp/
+0. Temp/
 logs/
 venv/
 __pycache__/

@@ -72,7 +72,6 @@ class TranslationProcessor:
 
             # Load API configuration
             ai_service = processing_settings.get('ai_service')
-
             # Check if it's an API service
             if "API" not in ai_service:
                 self.main_window.log_message(f"Error: {ai_service} is not an API service. Use web interface mode instead.")
@@ -379,8 +378,21 @@ class TranslationProcessor:
             self.main_window.log_message("No results to save")
 
     def parse_numbered_text(self, text, expected_count):
-        """Parse numbered text into list of translations"""
+        """
+        Parse numbered text into list of translations
+        """
         lines = []
+
+        # Remove common separator patterns that indicate end of content
+        separator_patterns = [
+            r'\n---+\n.*$',  # Dashes separator
+            r'\n={3,}\n.*$',  # Equal signs separator
+            r'\n\*{3,}\n.*$',  # Asterisk separator
+            r'\n_{3,}\n.*$',  # Underscore separator
+        ]
+
+        for pattern in separator_patterns:
+            text = re.sub(pattern, '', text, flags=re.DOTALL)
 
         # Find lines with pattern "number. text"
         pattern = r'(\d+)\.\s*(.*?)(?=\n\d+\.|$)'
@@ -388,7 +400,17 @@ class TranslationProcessor:
 
         if matches:
             # Create dictionary with line number as key
-            numbered_lines = {int(num): content.strip() for num, content in matches}
+            numbered_lines = {}
+            for num, content in matches:
+                # Clean up the content
+                content = content.strip()
+                # Remove trailing questions or notes from AI
+                content = re.sub(r'\n+(Bạn có muốn|Do you want|Would you like).*$', '', content, flags=re.IGNORECASE | re.DOTALL)
+                content = re.sub(r'\n+(Tôi có thể|I can|Let me know).*$', '', content, flags=re.IGNORECASE | re.DOTALL)
+                # Remove any MJMJ or similar patterns (CSV line break artifacts)
+                content = re.sub(r'\s*MJMJ\s*$', '', content)
+                content = content.strip()
+                numbered_lines[int(num)] = content
 
             # Fill in all lines
             for i in range(1, expected_count + 1):
@@ -401,6 +423,8 @@ class TranslationProcessor:
             text_lines = text.strip().split('\n')
             for line in text_lines[:expected_count]:
                 cleaned = re.sub(r'^\d+\.\s*', '', line).strip()
+                # Clean up trailing content
+                cleaned = re.sub(r'\s*MJMJ\s*$', '', cleaned)
                 lines.append(cleaned)
 
             # Pad with empty strings if needed
@@ -408,3 +432,34 @@ class TranslationProcessor:
                 lines.append("")
 
         return lines
+
+    def clean_translation_response(self, text):
+        """
+        Clean AI response by removing common artifacts and formatting issues
+        """
+        if not text:
+            return text
+
+        # Remove separator lines and everything after them
+        separator_patterns = [
+            r'\n---+.*$',
+            r'\n={3,}.*$',
+            r'\n\*{3,}.*$',
+            r'\n_{3,}.*$',
+        ]
+
+        for pattern in separator_patterns:
+            text = re.sub(pattern, '', text, flags=re.DOTALL)
+
+        # Remove common AI helper phrases at the end
+        ai_phrases = [
+            r'\n+(Bạn có muốn|Do you want|Would you like).*$',
+            r'\n+(Tôi có thể|I can|Let me know).*$',
+            r'\n+(Nếu bạn cần|If you need).*$',
+            r'\n+(Hãy cho tôi biết|Please let me know).*$',
+        ]
+
+        for phrase in ai_phrases:
+            text = re.sub(phrase, '', text, flags=re.IGNORECASE | re.DOTALL)
+
+        return text.strip()

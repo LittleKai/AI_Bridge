@@ -346,39 +346,6 @@ def read_epub_content(file_path, ruby_handling=None):
     except Exception:
         return []
 
-#  hàm xử lý ruby tags
-def process_ruby_tags(content, ruby_handling):
-    """
-    Process ruby tags based on handling mode
-    """
-    if ruby_handling == 'remove_all':
-        content = re.sub(r'<ruby>.*?</ruby>', lambda m: re.sub(r'<rt>.*?</rt>', '', m.group(0)), content, flags=re.DOTALL)
-        content = re.sub(r'</?r[ubt]>', '', content)
-    elif ruby_handling == 'remove_hiragana':
-        def replace_ruby(match):
-            ruby_content = match.group(1)
-            rb_text = re.search(r'<rb>(.*?)</rb>', ruby_content)
-            rt_text = re.search(r'<rt>(.*?)</rt>', ruby_content)
-
-            if rb_text and rt_text:
-                rt = rt_text.group(1)
-                if is_hiragana(rt):
-                    return rb_text.group(1)
-                else:
-                    return f"{rb_text.group(1)}({rt})"
-            return match.group(0)
-
-        content = re.sub(r'<ruby>(.*?)</ruby>', replace_ruby, content, flags=re.DOTALL)
-
-    return content
-
-
-def is_hiragana(text):
-    """
-    Check if text is hiragana
-    """
-    return bool(re.match(r'^[\u3040-\u309F]+$', text))
-
 def is_hiragana(text):
     """
     Check if text is hiragana
@@ -414,6 +381,10 @@ def is_css_content(text):
     for keyword in css_keywords:
         if keyword in text.lower() and ':' in text:
             return True
+
+    # Check for URLs that appear in DTD declarations
+    if 'http://www.w3.org/' in text and 'DTD' in text:
+        return True
 
     return False
 
@@ -544,6 +515,14 @@ def extract_content_from_html(content, ruby_handling=None):
             content = content.decode('utf-8')
         except UnicodeDecodeError:
             content = content.decode('utf-8', errors='replace')
+
+    # Remove DOCTYPE and XML declarations
+    content = re.sub(r'<!DOCTYPE[^>]*>', '', content, flags=re.IGNORECASE)
+    content = re.sub(r'<\?xml[^>]*\?>', '', content, flags=re.IGNORECASE)
+    content = re.sub(r'<!doctype[^>]*>', '', content, flags=re.IGNORECASE)
+
+    # Remove HTML comments
+    content = re.sub(r'<!--.*?-->', '', content, flags=re.DOTALL)
 
     if ruby_handling:
         content = process_ruby_tags(content, ruby_handling)

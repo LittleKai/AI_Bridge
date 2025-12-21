@@ -344,14 +344,3 @@ class WebBotServices:
     def run_grok_bot(self, prompt, batch_text, batch_size):
         """Run bot specifically for Grok web interface"""
         return self.run_generic_bot('Grok', prompt, batch_text, batch_size)
-
-    # Keep old cleanup function for backward compatibility
-    def cleanup_perplexity_chat(self):
-        """Clean up Perplexity chat by deleting the conversation"""
-        config = {
-            'folder': 'Perplexity',
-            'more_btn': 'more_btn.png',
-            'delete_btn': 'delete_btn.png',
-            'confirm_btn': 'confirm_btn.png'
-        }
-        self.cleanup_chat('Perplexity', config, 'assets/Perplexity')
