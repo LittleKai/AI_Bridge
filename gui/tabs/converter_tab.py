@@ -27,7 +27,6 @@ class ConverterTab:
 
         self.create_input_section(main_frame)
         self.create_language_section(main_frame)
-        self.create_output_section(main_frame)
         self.create_action_section(main_frame)
 
     def create_input_section(self, parent):
@@ -103,24 +102,6 @@ class ConverterTab:
         else:
             self.ruby_label.grid_remove()
             self.ruby_combo.grid_remove()
-
-    def create_output_section(self, parent):
-        """
-        Create output path display section
-        """
-        self.output_frame = ttk.LabelFrame(parent, text="Output", padding=10)
-        self.output_frame.pack(fill=tk.X, pady=(0, 10))
-
-        output_dir = str(Path.home() / "Documents" / "AIBridge")
-
-        output_display_frame = ttk.Frame(self.output_frame)
-        output_display_frame.pack(fill=tk.X, pady=(5, 0))
-
-        self.output_display_var = tk.StringVar(value=output_dir)
-        output_entry = ttk.Entry(output_display_frame,
-                                 textvariable=self.output_display_var,
-                                 state="readonly")
-        output_entry.pack(side=tk.LEFT, fill=tk.X, expand=True)
 
     def create_action_section(self, parent):
         """

@@ -22,8 +22,8 @@ class TranslationTab:
     def init_variables(self):
         """Initialize tab variables"""
         self.input_file = tk.StringVar(value="")
-        self.start_id = tk.StringVar(value="1")
-        self.stop_id = tk.StringVar(value="100")
+        self.start_id = tk.StringVar(value="0")
+        self.stop_id = tk.StringVar(value="100000")
 
         # Set default output directory
         default_output = os.path.join(os.path.expanduser("~"), "Documents", "AIBridge")

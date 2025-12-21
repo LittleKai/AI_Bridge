@@ -1,14 +1,14 @@
 {
   "window": {
     "width": 500,
-    "height": 800,
+    "height": 750,
     "x": 1316,
     "y": 8
   },
   "translation": {
     "input_file": "C:/Users/XEON/Documents/AIBridge/Vol_6_a_JP.csv",
     "output_file": "",
-    "start_id": "1",
+    "start_id": "0",
     "stop_id": "100000",
     "output_directory": "C:\\Users\\XEON\\Documents\\AIBridge"
   },

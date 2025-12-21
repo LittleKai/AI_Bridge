@@ -13,13 +13,13 @@ class WindowManager:
         # Default window settings
         self.window_settings = {
             'width': 500,
-            'height': 800,
+            'height': 750,
             'x': 1400,
             'y': 20
         }
 
         # Store original size for compact mode toggle
-        self.original_size = {'width': 500, 'height': 800}
+        self.original_size = {'width': 500, 'height': 750}
 
     def load_initial_settings(self):
         """Load initial settings including window position before GUI setup"""
@@ -34,7 +34,7 @@ class WindowManager:
                     # Store original size
                     self.original_size = {
                         'width': self.window_settings.get('width', 500),
-                        'height': self.window_settings.get('height', 800)
+                        'height': self.window_settings.get('height', 750)
                     }
 
                 # Load app key early if it exists
@@ -49,7 +49,7 @@ class WindowManager:
         settings = self.window_settings
 
         width = max(500, settings.get('width', 500))
-        height = max(800, settings.get('height', 800))
+        height = max(750, settings.get('height', 750))
 
         # Get saved position or use default
         screen_width = self.main_window.root.winfo_screenwidth()
@@ -77,7 +77,7 @@ class WindowManager:
         y = max(0, y)
 
         # Set window properties
-        self.main_window.root.minsize(500, 800)
+        self.main_window.root.minsize(500, 750)
         self.main_window.root.geometry(f"{width}x{height}+{x}+{y}")
         self.main_window.root.resizable(True, True)
         self.main_window.root.attributes('-topmost', True)
@@ -134,18 +134,22 @@ class WindowManager:
             if 'api_configs' in processing_settings:
                 for service, config in processing_settings['api_configs'].items():
                     if 'keys' in config and config['keys']:
-                        # Encrypt the keys and store them
-                        encrypted_keys = self.key_encryption.encrypt_keys_list(config['keys'])
-                        config['keys'] = encrypted_keys  # Store encrypted keys directly
+                        # Only encrypt plain text keys
+                        encrypted_keys = []
+                        for key in config['keys']:
+                            if key:
+                                encrypted = self.key_encryption.encrypt_key(key)
+                                encrypted_keys.append(encrypted)
+                        config['keys'] = encrypted_keys
                     else:
-                        config['keys'] = []  # Empty list if no keys
+                        config['keys'] = []
 
             # Combine all settings
             all_settings = {
                 'window': self.window_settings,
                 'translation': tab_settings.get('translation', {}),
                 'processing': processing_settings,
-                'converter': tab_settings.get('converter', {}),  # Add converter settings
+                'converter': tab_settings.get('converter', {}),
                 'app_key': app_key
             }
 
@@ -165,40 +169,42 @@ class WindowManager:
         try:
             if not os.path.exists('bot_settings.json'):
                 return
-
+    
             with open('bot_settings.json', 'r') as f:
                 settings = json.load(f)
-
+    
             # Load translation settings
             if 'translation' in settings:
                 self.main_window.translation_tab.load_settings(settings['translation'])
-
+    
             # Process and decrypt API keys before loading
             if 'processing' in settings:
                 processing_settings = settings['processing'].copy()
-
+    
                 # Decrypt API keys if they exist
                 if 'api_configs' in processing_settings:
                     for service, config in processing_settings['api_configs'].items():
-                        # Try to decrypt keys if they exist
                         if 'keys' in config and config['keys']:
                             try:
-                                # Decrypt the keys
-                                decrypted_keys = self.key_encryption.decrypt_keys_list(config['keys'])
+                                # Decrypt each key individually
+                                decrypted_keys = []
+                                for encrypted_key in config['keys']:
+                                    if encrypted_key:
+                                        decrypted = self.key_encryption.decrypt_key(encrypted_key)
+                                        decrypted_keys.append(decrypted)
                                 config['keys'] = decrypted_keys
                             except Exception as e:
-                                # If decryption fails, assume keys are not encrypted
                                 print(f"Warning: Could not decrypt keys for {service}: {e}")
-                                # Keep original keys
+                                config['keys'] = []
                         else:
                             config['keys'] = []
-
+    
                 # Load processing settings with decrypted keys
                 self.main_window.processing_tab.load_settings(processing_settings)
-
+    
             # Load converter settings
             if 'converter' in settings:
                 self.main_window.converter_tab.load_settings(settings['converter'])
-
+    
         except Exception as e:
             self.main_window.log_message(f"Warning: Could not load tab settings: {e}")

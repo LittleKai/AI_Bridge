@@ -75,12 +75,14 @@ class KeyEncryption:
         if not api_key:
             return ""
         try:
-            # Check if already encrypted (base64 pattern)
+            # Check if already encrypted by trying to decrypt
             try:
-                base64.urlsafe_b64decode(api_key.encode())
-                # If successful decode, might be already encrypted
+                decoded = base64.urlsafe_b64decode(api_key.encode())
+                self.cipher.decrypt(decoded)
+                # If decrypt successful, already encrypted
                 return api_key
             except:
+                # Not encrypted, proceed to encrypt
                 pass
 
             # Encrypt the key
@@ -88,7 +90,7 @@ class KeyEncryption:
             return base64.urlsafe_b64encode(encrypted).decode()
         except Exception as e:
             print(f"Encryption error: {e}")
-            return api_key  # Return original if encryption fails
+            return api_key
 
     def decrypt_key(self, encrypted_key):
         """Decrypt a single API key"""
@@ -99,9 +101,10 @@ class KeyEncryption:
             decoded = base64.urlsafe_b64decode(encrypted_key.encode())
             decrypted = self.cipher.decrypt(decoded)
             return decrypted.decode()
-        except Exception:
-            # If decryption fails, might not be encrypted
-            return encrypted_key  # Return as-is if not encrypted
+        except Exception as e:
+            # If decryption fails, might be plain text
+            print(f"Decryption warning: Key might be plain text")
+            return encrypted_key
     
     def mask_key_for_display(self, api_key):
         """Mask API key for display (show first 6 and last 4 characters)"""
