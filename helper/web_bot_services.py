@@ -106,12 +106,6 @@ class WebBotServices:
             # Extract coordinates
             left, top, right, bottom, center_x, center_y = box_coords
 
-            # if service_name=="Perplexity":
-            #     box_region =  left, top, right, bottom
-            #     if find_and_click("assets/Perplexity/Exception/choose_model.png",region=box_region):
-            #         if find_and_click("assets/Perplexity/Exception/gemini_3_flash.png", confidence=0.9):
-            #             time.sleep(1.0)
-
             # Calculate click position with offset
             click_x = center_x
             click_y = center_y + config['input_click_offset_y']
@@ -124,11 +118,27 @@ class WebBotServices:
             pyautogui.hotkey('ctrl', 'a')
             time.sleep(0.2)
 
-            # Combine prompt with batch text
-            full_text = prompt.format(
-                count_info=f"Source text consists of {batch_size} numbered lines from 1 to {batch_size}.",
-                text=batch_text
-            )
+            # Kiểm tra và tự động sửa Prompt nếu thiếu placeholder
+            formatted_prompt = prompt
+            count_info_str = f"Source text consists of {batch_size} numbered lines from 1 to {batch_size}."
+
+            # Nếu prompt chưa có chỗ điền text, tự động nối thêm vào cuối
+            if "{text}" not in prompt:
+                # Nếu prompt chưa có count_info, thêm vào luôn
+                if "{count_info}" not in prompt:
+                    formatted_prompt = f"{prompt}\n\n{count_info_str}\n\nNội dung cần dịch:\n{{text}}"
+                else:
+                    formatted_prompt = f"{prompt}\n\nNội dung cần dịch:\n{{text}}"
+
+            # Thực hiện format an toàn
+            try:
+                full_text = formatted_prompt.format(
+                    count_info=count_info_str,
+                    text=batch_text
+                )
+            except KeyError:
+                # Fallback nếu format lỗi do xung đột ngoặc nhọn
+                full_text = f"{prompt}\n\n{count_info_str}\n\nNội dung cần dịch:\n{batch_text}"
 
             # Copy to clipboard and paste
             pyperclip.copy(full_text)
@@ -257,7 +267,7 @@ class WebBotServices:
             # Find chat option region at top of screen
             screen_width, _ = pyautogui.size()
 
-            if service_name =="Perplexity":
+            if service_name == "Perplexity":
                 top_region = (screen_width/2, 0, screen_width, 100)
             else:
                 top_region = (0, 0, screen_width/2, 100)

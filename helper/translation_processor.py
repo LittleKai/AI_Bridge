@@ -301,7 +301,7 @@ class TranslationProcessor:
             except Exception as e:
                 self.main_window.log_message(f"Warning: Could not read existing output: {e}")
 
-        # Find IDs that need processing
+        # Find IDs that need processing - prioritize failed and missing IDs
         # 1. IDs in input range that are not in output at all
         missing_ids = all_input_ids - set(existing_results.keys())
         # 2. IDs in input range that failed previously
@@ -514,3 +514,34 @@ class TranslationProcessor:
             text = re.sub(phrase, '', text, flags=re.IGNORECASE | re.DOTALL)
 
         return text.strip()
+
+    def get_priority_ids(self, df_input, output_file):
+        """
+        Hàm thay thế logic 'continuing from ID'.
+        Nó sẽ tìm ID bị thiếu và ID bị lỗi để xử lý trước.
+        """
+        all_input_ids = set(df_input['id'].unique())
+        completed_ids = set()
+
+        # Đọc file output để xem đã làm được gì rồi
+        if os.path.exists(output_file):
+            try:
+                # Đọc file, coi tất cả là string để tránh lỗi type
+                df_out = pd.read_csv(output_file, dtype={'edit': str, 'status': str})
+
+                # Lọc ra những dòng ĐÃ HOÀN THÀNH (có text và không failed)
+                valid_rows = df_out[
+                    (df_out['edit'].notna()) &
+                    (df_out['edit'].str.strip().str.len() > 0) &
+                    (df_out['status'] != 'failed')
+                    ]
+                completed_ids = set(valid_rows['id'].unique())
+            except Exception as e:
+                self.main_window.log_message(f"Lỗi đọc file output cũ: {e}")
+
+        # Tính toán ID cần làm: (Tất cả - Đã xong)
+        ids_to_process_set = all_input_ids - completed_ids
+        ids_to_process = sorted(list(ids_to_process_set))
+
+        self.main_window.log_message(f"Phân tích thông minh: Cần xử lý {len(ids_to_process)} dòng (Bao gồm id cũ bị thiếu/lỗi).")
+        return ids_to_process
