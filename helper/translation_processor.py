@@ -198,7 +198,10 @@ class TranslationProcessor:
                     prompt = prompt_row.iloc[0][source_lang]
                     if pd.notna(prompt) and prompt:
                         self.main_window.log_message(f"Successfully loaded prompt for {source_lang}, type: {prompt_type}")
-                        return prompt
+                        # Add format placeholders and additional instructions
+                        # These will be replaced with actual values later
+                        prompt_with_format = prompt.strip() + "\n{count_info}\nVẫn giữ định dạng đánh số như bản gốc (1., 2., ...).\nChỉ trả về các dòng dịch được đánh số, không viết thêm bất kỳ nội dung nào khác.\nĐây là văn bản cần chuyển ngữ:\n{text}"
+                        return prompt_with_format
                     else:
                         self.main_window.log_message(f"Error: Prompt is empty for {source_lang}, type: {prompt_type}")
                 else:
@@ -219,7 +222,7 @@ class TranslationProcessor:
 
     def process_with_api(self, input_file, output_file, ai_service, model_name, api_config,
                          batch_size, prompt_type, start_id, stop_id):
-        """Process translation using AI API"""
+        """Process translation using AI API with proper missing/failed row handling"""
 
         # Load translation prompt
         prompt_template = self.load_translation_prompt(input_file, prompt_type)
@@ -245,85 +248,113 @@ class TranslationProcessor:
             self.main_window.log_message(f"Error reading input file: {e}")
             return
 
-        # Check for existing output file and get completed IDs (rows with text in edit column)
-        existing_results = []
-        completed_ids = set()  # Track IDs that have edit text
+        # Apply ID range filters
+        try:
+            start_id = int(start_id) if start_id else None
+            stop_id = int(stop_id) if stop_id else None
+
+            original_df = df.copy()  # Keep original for reference
+
+            if start_id is not None:
+                df = df[df['id'] >= start_id]
+                self.main_window.log_message(f"Filtered by start_id >= {start_id}: {len(original_df)} -> {len(df)} rows")
+
+            if stop_id is not None:
+                df = df[df['id'] <= stop_id]
+                self.main_window.log_message(f"Filtered by stop_id <= {stop_id}: {len(df)} rows")
+
+        except Exception as e:
+            self.main_window.log_message(f"Warning: Could not filter by ID range: {e}")
+
+        # Create a set of all IDs that should be in the output (from filtered input)
+        all_input_ids = set(df['id'].tolist())
+        self.main_window.log_message(f"Total IDs to process: {len(all_input_ids)} (Range: {min(all_input_ids)} to {max(all_input_ids)})")
+
+        # Load existing output and check what needs processing
+        existing_results = {}
+        completed_ids = set()
+        failed_ids = set()
 
         if os.path.exists(output_file):
             try:
                 existing_df = pd.read_csv(output_file)
                 if not existing_df.empty:
-                    existing_results = existing_df.to_dict('records')
+                    for _, row in existing_df.iterrows():
+                        row_id = row['id']
+                        existing_results[row_id] = {
+                            'id': row_id,
+                            'raw': row.get('raw', ''),
+                            'edit': row.get('edit', ''),
+                            'status': row.get('status', '')
+                        }
 
-                    # Get IDs where edit column has text (not empty/null)
-                    if 'edit' in existing_df.columns:
-                        # Consider completed if edit column has non-empty text
-                        completed_df = existing_df[existing_df['edit'].notna() & (existing_df['edit'] != '')]
-                        completed_ids = set(completed_df['id'].tolist())
-                        failed_count = len(existing_df) - len(completed_ids)
-
-                        if completed_ids:
-                            self.main_window.log_message(f"Found {len(completed_ids)} completed rows, will retry {failed_count} failed/empty rows")
+                        # Check if this ID has valid translation
+                        if row.get('edit') and str(row.get('edit')).strip():
+                            completed_ids.add(row_id)
                         else:
-                            self.main_window.log_message(f"Found {len(existing_df)} rows but none completed, will retry all")
-                    else:
-                        self.main_window.log_message("No 'edit' column found in existing output, will process all")
+                            failed_ids.add(row_id)
+
+                    self.main_window.log_message(f"Existing output has {len(existing_results)} rows total")
+                    self.main_window.log_message(f"  - Completed: {len(completed_ids)} rows")
+                    self.main_window.log_message(f"  - Failed/Empty: {len(failed_ids)} rows")
 
             except Exception as e:
                 self.main_window.log_message(f"Warning: Could not read existing output: {e}")
 
-        # Filter by ID range
-        try:
-            # Apply start/stop ID filters
-            start_id = int(start_id) if start_id else None
-            stop_id = int(stop_id) if stop_id else None
+        # Find IDs that need processing
+        # 1. IDs in input range that are not in output at all
+        missing_ids = all_input_ids - set(existing_results.keys())
+        # 2. IDs in input range that failed previously
+        retry_ids = all_input_ids & failed_ids
+        # Combine both sets
+        ids_to_process = missing_ids | retry_ids
 
-            if start_id is not None:
-                df = df[df['id'] >= start_id]
-            if stop_id is not None:
-                df = df[df['id'] <= stop_id]
+        self.main_window.log_message(f"Analysis of IDs to process:")
+        self.main_window.log_message(f"  - Missing from output: {len(missing_ids)} IDs")
+        if missing_ids and len(missing_ids) <= 10:
+            self.main_window.log_message(f"    Missing IDs: {sorted(list(missing_ids))}")
+        elif missing_ids:
+            sample_missing = sorted(list(missing_ids))[:10]
+            self.main_window.log_message(f"    First 10 missing IDs: {sample_missing}...")
 
-            # Filter out only successfully completed IDs (with edit text)
-            if completed_ids:
-                df = df[~df['id'].isin(completed_ids)]
-                self.main_window.log_message(f"Excluding {len(completed_ids)} completed IDs, will process {len(df)} rows")
+        self.main_window.log_message(f"  - Failed/need retry: {len(retry_ids)} IDs")
+        self.main_window.log_message(f"  - Total to process: {len(ids_to_process)} IDs")
 
-            self.main_window.log_message(f"Processing {len(df)} rows after filtering (ID range: {start_id or 'start'} to {stop_id or 'end'})")
-            self.total_input_rows = len(df)
+        if not ids_to_process:
+            self.main_window.log_message("All IDs in range already have valid translations. Nothing to process.")
+            return
 
-            # Add already processed rows to total for progress display
-            if existing_results:
-                # Count completed based on edit column having text
-                self.processed_rows = len([r for r in existing_results if r.get('edit') and str(r.get('edit')).strip()])
-                self.total_input_rows += self.processed_rows
+        # Create dataframe of rows to process
+        df_to_process = df[df['id'].isin(ids_to_process)]
+        df_to_process = df_to_process.sort_values('id')  # Sort by ID
 
-        except Exception as e:
-            self.main_window.log_message(f"Warning: Could not filter by ID range: {e}")
-            self.total_input_rows = len(df)
+        self.main_window.log_message(f"Prepared {len(df_to_process)} rows for processing")
 
-        # Keep only completed results (with edit text), remove failed ones for retry
-        results = [r for r in existing_results if r.get('edit') and str(r.get('edit')).strip()]
+        # Set total for progress tracking
+        self.total_input_rows = len(all_input_ids)
+        self.processed_rows = len(completed_ids & all_input_ids)  # Only count completed in our range
 
         # Process in batches
         batch_size = int(batch_size) if batch_size else 10
-        total_batches = (len(df) - 1) // batch_size + 1 if len(df) > 0 else 0
+        total_batches = (len(df_to_process) - 1) // batch_size + 1 if len(df_to_process) > 0 else 0
+        rows_processed_count = 0
 
-        for batch_num, i in enumerate(range(0, len(df), batch_size), 1):
+        for batch_num, i in enumerate(range(0, len(df_to_process), batch_size), 1):
             if not self.is_running:
                 self.main_window.log_message("Processing stopped by user")
                 break
 
-            batch = df.iloc[i:i+batch_size]
+            batch = df_to_process.iloc[i:i+batch_size]
             batch_ids = batch['id'].tolist()
-            self.main_window.log_message(f"Processing batch {batch_num}/{total_batches} (IDs: {batch_ids[0]}-{batch_ids[-1]}, {len(batch)} rows)")
+            self.main_window.log_message(f"Processing batch {batch_num}/{total_batches} (IDs: {min(batch_ids)}-{max(batch_ids)}, {len(batch)} rows)")
 
-            # Create batch text without trailing newline
+            # Create batch text
             batch_lines = []
-            for j, (_, row) in enumerate(batch.iterrows()):
-                batch_lines.append(f"{j+1}. {row['text']}")
+            for j, (_, row) in enumerate(batch.iterrows(), 1):
+                batch_lines.append(f"{j}. {row['text']}")
             batch_text = "\n".join(batch_lines)
 
-            # Format prompt
+            # Format prompt with actual values
             count_info = f"Source text consists of {len(batch)} numbered lines from 1 to {len(batch)}."
             prompt = prompt_template.format(count_info=count_info, text=batch_text)
 
@@ -346,59 +377,63 @@ class TranslationProcessor:
                 successful_count = sum(1 for t in translations if t)
                 self.main_window.log_message(f"Batch {batch_num} completed: {successful_count}/{len(batch)} translations successful")
 
-                # Add to results
+                # Update results
                 for (idx, row), translation in zip(batch.iterrows(), translations):
-                    results.append({
+                    existing_results[row['id']] = {
                         'id': row['id'],
                         'raw': row['text'],
                         'edit': translation,
-                        'status': '' if translation else 'failed'  # Empty status for completed, 'failed' for failed
-                    })
+                        'status': '' if translation else 'failed'
+                    }
             else:
                 # Mark batch as failed
                 self.main_window.log_message(f"Batch {batch_num} failed: {error_msg}")
                 for idx, row in batch.iterrows():
-                    results.append({
+                    existing_results[row['id']] = {
                         'id': row['id'],
                         'raw': row['text'],
                         'edit': '',
                         'status': 'failed'
-                    })
+                    }
 
-            # Save intermediate results and update progress
-            if results:
-                results_df = pd.DataFrame(results)
+            rows_processed_count += len(batch)
+
+            # Save and sort every 1000 rows or at the end
+            if rows_processed_count >= 1000 or batch_num == total_batches:
+                results_list = list(existing_results.values())
+                results_df = pd.DataFrame(results_list)
                 results_df_sorted = results_df.sort_values('id')
                 results_df_sorted.to_csv(output_file, index=False)
                 self.update_progress()
 
+                if rows_processed_count >= 1000:
+                    self.main_window.log_message(f"Saved and sorted after {rows_processed_count} rows")
+                    rows_processed_count = 0
+
             # Small delay between batches
-            if batch_num < total_batches:
+            if batch_num < total_batches and self.is_running:
                 self.main_window.log_message(f"Waiting 2 seconds before next batch...")
                 time.sleep(2)
 
-        # Final save and summary
-        if results:
-            results_df = pd.DataFrame(results)
+        # Final save
+        if existing_results:
+            results_list = list(existing_results.values())
+            results_df = pd.DataFrame(results_list)
             results_df_sorted = results_df.sort_values('id')
             results_df_sorted.to_csv(output_file, index=False)
 
-            # Count based on edit column having text
-            completed_count = len([r for r in results if r.get('edit') and str(r.get('edit')).strip()])
-            failed_count = len([r for r in results if not r.get('edit') or not str(r.get('edit')).strip()])
+            # Final count
+            completed_count = sum(1 for r in results_list if r.get('edit') and str(r.get('edit')).strip())
+            failed_count = len(results_list) - completed_count
 
             self.main_window.log_message(f"Translation completed!")
-            self.main_window.log_message(f"Total: {len(results)} rows processed")
+            self.main_window.log_message(f"Total rows in output: {len(results_list)}")
             self.main_window.log_message(f"Successful: {completed_count} rows")
-            self.main_window.log_message(f"Failed: {failed_count} rows")
+            self.main_window.log_message(f"Failed/Empty: {failed_count} rows")
             self.main_window.log_message(f"Output saved to: {output_file}")
-        else:
-            self.main_window.log_message("No results to save")
 
     def parse_numbered_text(self, text, expected_count):
-        """
-        Parse numbered text into list of translations
-        """
+        """Parse numbered text into list of translations"""
         lines = []
 
         # Remove common separator patterns that indicate end of content
@@ -452,9 +487,7 @@ class TranslationProcessor:
         return lines
 
     def clean_translation_response(self, text):
-        """
-        Clean AI response by removing common artifacts and formatting issues
-        """
+        """Clean AI response by removing common artifacts and formatting issues"""
         if not text:
             return text
 
