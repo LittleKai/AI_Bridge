@@ -450,24 +450,39 @@ class TranslationProcessor:
             self.main_window.log_message(f"Output saved to: {output_file}")
 
 
-    def parse_numbered_text(self, text, expected_count):
+    @staticmethod
+    def parse_numbered_text(text, expected_count):
         """Parse numbered text into list of translations"""
         lines = []
 
-        # Remove common separator patterns that indicate end of content
-        separator_patterns = [
-            r'\n---+\n.*$',  # Dashes separator
-            r'\n={3,}\n.*$',  # Equal signs separator
-            r'\n\*{3,}\n.*$',  # Asterisk separator
-            r'\n_{3,}\n.*$',  # Underscore separator
+        # Remove AI's additional questions/comments at the end
+        unwanted_patterns = [
+            r'\*{3,}.*?$',  # Remove *** and everything after
+            r'---+.*?$',     # Remove --- and everything after
+            r'={3,}.*?$',    # Remove === and everything after
+            r'_{3,}.*?$',    # Remove ___ and everything after
+            # Vietnamese AI questions
+            r'Bạn có hài lòng.*?$',
+            r'Bạn có muốn.*?$',
+            r'Có cần.*?$',
+            r'Nếu bạn.*?$',
+            r'Hãy cho tôi biết.*?$',
+            # English AI questions
+            r'Would you like.*?$',
+            r'Do you want.*?$',
+            r'Is there.*?$',
+            r'Let me know.*?$',
+            r'Please let me know.*?$',
         ]
 
-        for pattern in separator_patterns:
-            text = re.sub(pattern, '', text, flags=re.DOTALL)
+        # Apply all cleaning patterns
+        cleaned_text = text
+        for pattern in unwanted_patterns:
+            cleaned_text = re.sub(pattern, '', cleaned_text, flags=re.IGNORECASE | re.DOTALL | re.MULTILINE)
 
-        # Find lines with pattern "number. text"
+        # Find all numbered lines
         pattern = r'(\d+)\.\s*(.*?)(?=\n\d+\.|$)'
-        matches = re.findall(pattern, text, re.DOTALL)
+        matches = re.findall(pattern, cleaned_text, re.DOTALL)
 
         if matches:
             # Create dictionary with line number as key
@@ -475,60 +490,43 @@ class TranslationProcessor:
             for num, content in matches:
                 # Clean up the content
                 content = content.strip()
-                # Remove trailing questions or notes from AI
-                content = re.sub(r'\n+(Bạn có muốn|Do you want|Would you like).*$', '', content, flags=re.IGNORECASE | re.DOTALL)
-                content = re.sub(r'\n+(Tôi có thể|I can|Let me know).*$', '', content, flags=re.IGNORECASE | re.DOTALL)
-                # Remove any MJMJ or similar patterns (CSV line break artifacts)
-                content = re.sub(r'\s*MJMJ\s*$', '', content)
+                # Additional cleaning for each line
+                for pattern in unwanted_patterns:
+                    content = re.sub(pattern, '', content, flags=re.IGNORECASE | re.DOTALL)
                 content = content.strip()
-                numbered_lines[int(num)] = content
 
-            # Fill in all lines
+                line_num = int(num)
+                if 1 <= line_num <= expected_count:  # Only keep valid line numbers
+                    numbered_lines[line_num] = content
+
+            # Check if line 1 is missing but line 2 exists
+            if 1 not in numbered_lines and 2 in numbered_lines:
+                # Extract text before "2." as content for line 1
+                pre_match = re.search(r'^(.*?)(?=\n?2\.)', cleaned_text, re.DOTALL)
+                if pre_match:
+                    pre_text = pre_match.group(1).strip()
+                    if pre_text and not re.match(r'^\d+\.', pre_text):  # Make sure it's not another numbered line
+                        numbered_lines[1] = pre_text
+
+            # Fill in all lines in order
             for i in range(1, expected_count + 1):
                 if i in numbered_lines:
                     lines.append(numbered_lines[i])
                 else:
                     lines.append("")  # Missing line
         else:
-            # Fallback: split by newline
-            text_lines = text.strip().split('\n')
-            for line in text_lines[:expected_count]:
+            # Fallback: split by newline and clean
+            text_lines = cleaned_text.strip().split('\n')
+            for i, line in enumerate(text_lines[:expected_count]):
+                # Remove line numbers if present
                 cleaned = re.sub(r'^\d+\.\s*', '', line).strip()
-                # Clean up trailing content
-                cleaned = re.sub(r'\s*MJMJ\s*$', '', cleaned)
-                lines.append(cleaned)
+                # Apply additional cleaning
+                for pattern in unwanted_patterns:
+                    cleaned = re.sub(pattern, '', cleaned, flags=re.IGNORECASE)
+                lines.append(cleaned.strip())
 
             # Pad with empty strings if needed
             while len(lines) < expected_count:
                 lines.append("")
 
         return lines
-
-    def clean_translation_response(self, text):
-        """Clean AI response by removing common artifacts and formatting issues"""
-        if not text:
-            return text
-
-        # Remove separator lines and everything after them
-        separator_patterns = [
-            r'\n---+.*$',
-            r'\n={3,}.*$',
-            r'\n\*{3,}.*$',
-            r'\n_{3,}.*$',
-        ]
-
-        for pattern in separator_patterns:
-            text = re.sub(pattern, '', text, flags=re.DOTALL)
-
-        # Remove common AI helper phrases at the end
-        ai_phrases = [
-            r'\n+(Bạn có muốn|Do you want|Would you like).*$',
-            r'\n+(Tôi có thể|I can|Let me know).*$',
-            r'\n+(Nếu bạn cần|If you need).*$',
-            r'\n+(Hãy cho tôi biết|Please let me know).*$',
-        ]
-
-        for phrase in ai_phrases:
-            text = re.sub(phrase, '', text, flags=re.IGNORECASE | re.DOTALL)
-
-        return text.strip()

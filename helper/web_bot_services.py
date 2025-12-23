@@ -3,7 +3,7 @@ import pyautogui
 import pyperclip
 import re
 from helper.click_handler import find_and_click
-
+from helper.translation_processor import TranslationProcessor
 
 class WebBotServices:
     """Web automation services for various AI platforms"""
@@ -230,7 +230,7 @@ class WebBotServices:
             response_text = pyperclip.paste()
 
             # Parse the response
-            translated_lines = self.parse_numbered_text(response_text, batch_size)
+            translated_lines = TranslationProcessor.parse_numbered_text(response_text, batch_size)
 
             # Clean up chat
             self.cleanup_chat(service_name, config, assets_folder)
@@ -301,34 +301,3 @@ class WebBotServices:
 
         except Exception as e:
             self.main_window.log_message(f"Cleanup error: {str(e)}")
-
-    def parse_numbered_text(self, text, expected_count):
-        """Parse numbered text into list of translations"""
-        lines = []
-
-        # Find lines with pattern "number. text"
-        pattern = r'(\d+)\.\s*(.*?)(?=\n\d+\.|$)'
-        matches = re.findall(pattern, text, re.DOTALL)
-
-        if matches:
-            # Create dictionary with line number as key
-            numbered_lines = {int(num): content.strip() for num, content in matches}
-
-            # Fill in all lines
-            for i in range(1, expected_count + 1):
-                if i in numbered_lines:
-                    lines.append(numbered_lines[i])
-                else:
-                    lines.append("")  # Missing line
-        else:
-            # Fallback: split by newline
-            text_lines = text.strip().split('\n')
-            for line in text_lines[:expected_count]:
-                cleaned = re.sub(r'^\d+\.\s*', '', line).strip()
-                lines.append(cleaned)
-
-            # Pad with empty strings if needed
-            while len(lines) < expected_count:
-                lines.append("")
-
-        return lines
