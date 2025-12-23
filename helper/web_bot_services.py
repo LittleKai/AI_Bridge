@@ -332,24 +332,3 @@ class WebBotServices:
                 lines.append("")
 
         return lines
-
-    # Wrapper functions for backward compatibility
-    def run_perplexity_bot(self, prompt, batch_text, batch_size):
-        """Run bot specifically for Perplexity web interface"""
-        return self.run_generic_bot('Perplexity', prompt, batch_text, batch_size)
-
-    def run_gemini_bot(self, prompt, batch_text, batch_size):
-        """Run bot specifically for Gemini web interface"""
-        return self.run_generic_bot('Gemini', prompt, batch_text, batch_size)
-
-    def run_chatgpt_bot(self, prompt, batch_text, batch_size):
-        """Run bot specifically for ChatGPT web interface"""
-        return self.run_generic_bot('ChatGPT', prompt, batch_text, batch_size)
-
-    def run_claude_bot(self, prompt, batch_text, batch_size):
-        """Run bot specifically for Claude web interface"""
-        return self.run_generic_bot('Claude', prompt, batch_text, batch_size)
-
-    def run_grok_bot(self, prompt, batch_text, batch_size):
-        """Run bot specifically for Grok web interface"""
-        return self.run_generic_bot('Grok', prompt, batch_text, batch_size)
