@@ -225,6 +225,22 @@ class AITranslationBridgeGUI:
     def start_bot(self):
         """Start bot based on selected service type"""
         if not self.is_running and self.key_valid:
+            # Check if manual mode is selected
+            processing_settings = self.processing_tab.get_settings()
+            mode = processing_settings.get('mode', 'automatic')
+
+            if mode == 'manual':
+                # In manual mode, don't start automated processing
+                self.log_message("Manual mode selected - use Copy Prompt button to begin")
+                messagebox.showinfo("Manual Mode",
+                                    "Manual mode is active.\n\n"
+                                    "1. Click 'Copy Prompt' to copy the prompt\n"
+                                    "2. Paste into your AI service\n"
+                                    "3. Copy the response\n"
+                                    "4. Click 'Paste Response' to save results")
+                return
+
+        if not self.is_running and self.key_valid:
             self.is_running = True
 
             # Update progress display with running status

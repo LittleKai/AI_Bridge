@@ -3,6 +3,7 @@ import pandas as pd
 import os
 import time
 from helper.web_bot_services import WebBotServices
+from helper.prompt_helper import PromptHelper
 
 
 class BotController:
@@ -106,54 +107,20 @@ class BotController:
 
     def _apply_id_filters(self, df, translation_settings):
         """Apply start_id and stop_id filters to dataframe"""
-        start_id = translation_settings.get('start_id')
-        stop_id = translation_settings.get('stop_id')
-
-        try:
-            start_id = int(start_id) if start_id else None
-            stop_id = int(stop_id) if stop_id else None
-
-            if start_id is not None:
-                df = df[df['id'] >= start_id]
-            if stop_id is not None:
-                df = df[df['id'] <= stop_id]
-
-        except Exception as e:
-            self.main_window.log_message(f"Warning: Could not filter by ID range: {e}")
-
-        return df
+        return PromptHelper.apply_id_filters(
+            df,
+            translation_settings.get('start_id'),
+            translation_settings.get('stop_id')
+        )
 
     def _load_existing_results(self, output_path):
         """Load and analyze existing output file"""
-        existing_results = {}
-        completed_ids = set()
-        failed_ids = set()
+        existing_results, completed_ids, failed_ids = PromptHelper.load_existing_results(output_path)
 
-        if os.path.exists(output_path):
-            try:
-                existing_df = pd.read_csv(output_path)
-                if not existing_df.empty:
-                    for _, row in existing_df.iterrows():
-                        row_id = row['id']
-                        existing_results[row_id] = {
-                            'id': row_id,
-                            'raw': row.get('raw', ''),
-                            'edit': row.get('edit', ''),
-                            'status': row.get('status', '')
-                        }
-
-                        # Check if translation exists and is valid
-                        edit_value = row.get('edit', '')
-                        if edit_value and str(edit_value).strip() and str(edit_value).strip() != 'nan':
-                            completed_ids.add(row_id)
-                        else:
-                            failed_ids.add(row_id)
-
-                    self.main_window.log_message(f"Found existing output with {len(existing_df)} rows")
-                    self.main_window.log_message(f"  - Completed: {len(completed_ids)} rows")
-                    self.main_window.log_message(f"  - Failed/Empty: {len(failed_ids)} rows")
-            except Exception as e:
-                self.main_window.log_message(f"Warning: Could not read existing output: {e}")
+        if existing_results:
+            self.main_window.log_message(f"Found existing output with {len(existing_results)} rows")
+            self.main_window.log_message(f"  - Completed: {len(completed_ids)} rows")
+            self.main_window.log_message(f"  - Failed/Empty: {len(failed_ids)} rows")
 
         return existing_results, completed_ids, failed_ids
 
@@ -255,10 +222,7 @@ class BotController:
 
     def _create_batch_text(self, batch):
         """Create numbered text from batch dataframe"""
-        batch_lines = []
-        for j, (_, row) in enumerate(batch.iterrows()):
-            batch_lines.append(f"{j+1}. {row['text']}")
-        return "\n".join(batch_lines)
+        return PromptHelper.create_batch_text(batch)
 
     def _process_successful_batch(self, batch, translations, existing_results):
         """Process successful translation results"""
@@ -307,49 +271,6 @@ class BotController:
             self.main_window.log_message(f"Failed: {failed_count} rows")
             self.main_window.log_message(f"Output saved to: {output_path}")
 
-    def load_translation_prompt(self, input_path, prompt_type):
-        """Load translation prompt based on detected language and prompt type"""
-        input_filename = os.path.basename(input_path)
-
-        # Detect source language from filename
-        source_lang = None
-        for lang in ['JP', 'EN', 'KR', 'CN', 'VI']:
-            if lang in input_filename.upper():
-                source_lang = lang
-                break
-
-        if not source_lang:
-            self.main_window.log_message("Error: Could not detect source language from filename")
-            return None
-
-        try:
-            prompt_file = "assets/translate_prompt.xlsx"
-            if not os.path.exists(prompt_file):
-                self.main_window.log_message("Error: Prompt file not found")
-                return None
-
-            df = pd.read_excel(prompt_file)
-
-            if 'type' in df.columns and source_lang in df.columns:
-                prompt_row = df[df['type'] == prompt_type]
-                if not prompt_row.empty:
-                    prompt = prompt_row.iloc[0][source_lang]
-                    if pd.notna(prompt) and prompt:
-                        self.main_window.log_message(f"Loaded prompt for {source_lang}, type: {prompt_type}")
-                        # Add format placeholders and additional instructions
-                        # These will be replaced with actual values later
-                        prompt_with_format = prompt.strip() + "\n{count_info}\nVẫn giữ định dạng đánh số như bản gốc (1., 2., ...)."+\
-                                             "\nĐây là văn bản cần chuyển ngữ:\n{text}"
-                        # "\nChỉ trả về các dòng dịch được đánh số, không viết thêm bất kỳ nội dung nào khác."+\
-
-                        return prompt_with_format
-
-            return None
-
-        except Exception as e:
-            self.main_window.log_message(f"Error loading prompt: {e}")
-            return None
-
     def process_batch_results(self, batch, translations, input_file, prompt_type):
         """Process batch results and save to output file"""
         try:
@@ -381,36 +302,15 @@ class BotController:
 
     def generate_output_path(self, input_path, prompt_type):
         """Generate output path based on input file name and prompt type"""
-        input_filename = os.path.basename(input_path)
+        return PromptHelper.generate_output_path(input_path, prompt_type)
 
-        # Detect language from filename
-        lang_folder = None
-        for lang in ['JP', 'EN', 'KR', 'CN', 'VI']:
-            if lang in input_filename.upper():
-                lang_folder = lang
-                break
-
-        if not lang_folder:
-            lang_folder = "Other"
-
-        # Create output filename without duplicating language
-        filename_without_ext, ext = os.path.splitext(input_filename)
-        if prompt_type:
-            output_filename = f"{filename_without_ext}_{prompt_type}_translated{ext}"
-        else:
-            output_filename = f"{filename_without_ext}_translated{ext}"
-
-        # Create output directory
-        output_dir = os.path.join(
-            os.path.expanduser("~"),
-            "Documents",
-            "AIBridge",
-            "Translated",
-            lang_folder
+    def load_translation_prompt(self, input_path, prompt_type):
+        """Load translation prompt based on detected language and prompt type"""
+        return PromptHelper.load_translation_prompt(
+            input_path,
+            prompt_type,
+            self.main_window.log_message
         )
-        os.makedirs(output_dir, exist_ok=True)
-
-        return os.path.join(output_dir, output_filename)
 
     def run_bot(self):
         """Legacy method - redirects to run_web_service"""

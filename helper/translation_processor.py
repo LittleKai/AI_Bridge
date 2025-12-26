@@ -4,6 +4,7 @@ import os
 import re
 from datetime import datetime
 from helper.ai_api_handler import AIAPIHandler
+from helper.prompt_helper import PromptHelper
 
 
 class TranslationProcessor:
@@ -124,102 +125,15 @@ class TranslationProcessor:
 
     def generate_output_path(self, input_path, prompt_type):
         """Generate output path based on input file name and prompt type"""
-        # Get absolute path to work with
-        input_path = os.path.abspath(input_path)
-        input_filename = os.path.basename(input_path)
-
-        # Detect language from filename only
-        lang_folder = None
-        for lang in ['JP', 'EN', 'KR', 'CN', 'VI']:
-            if lang in input_filename.upper():
-                lang_folder = lang
-                break
-
-        if not lang_folder:
-            lang_folder = "Other"
-            self.main_window.log_message(f"Warning: Could not detect language from filename, using 'Other' folder")
-
-        # Create output filename with prompt type only (don't duplicate language)
-        filename_without_ext, ext = os.path.splitext(input_filename)
-
-        # Format: original_name_prompttype_translated.csv
-        if prompt_type:
-            output_filename = f"{filename_without_ext}_{prompt_type}_translated{ext}"
-        else:
-            output_filename = f"{filename_without_ext}_translated{ext}"
-
-        # Create output directory
-        output_dir = os.path.join(
-            os.path.expanduser("~"),
-            "Documents",
-            "AIBridge",
-            "Translated",
-            lang_folder
-        )
-
-        # Ensure directory exists
-        os.makedirs(output_dir, exist_ok=True)
-
-        return os.path.join(output_dir, output_filename)
+        return PromptHelper.generate_output_path(input_path, prompt_type)
 
     def load_translation_prompt(self, input_path, prompt_type):
         """Load translation prompt based on detected language and prompt type"""
-        # Get absolute path
-        input_path = os.path.abspath(input_path)
-        input_filename = os.path.basename(input_path)
-
-        # Detect source language from filename only
-        source_lang = None
-        for lang in ['JP', 'EN', 'KR', 'CN', 'VI']:
-            if lang in input_filename.upper():
-                source_lang = lang
-                break
-
-        if not source_lang:
-            self.main_window.log_message("Error: Could not detect source language from filename")
-            self.main_window.log_message("Filename should contain language code (CN, JP, EN, KR, VI)")
-            return None
-
-        self.main_window.log_message(f"Loading prompt for source language: {source_lang}, type: {prompt_type}")
-
-        # Load prompt from Excel file
-        try:
-            prompt_file = "assets/translate_prompt.xlsx"
-            if not os.path.exists(prompt_file):
-                self.main_window.log_message("Error: Prompt file not found at assets/translate_prompt.xlsx")
-                return None
-
-            df = pd.read_excel(prompt_file)
-
-            # Find prompt for the specified type and language
-            if 'type' in df.columns and source_lang in df.columns:
-                prompt_row = df[df['type'] == prompt_type]
-                if not prompt_row.empty:
-                    prompt = prompt_row.iloc[0][source_lang]
-                    if pd.notna(prompt) and prompt:
-                        self.main_window.log_message(f"Successfully loaded prompt for {source_lang}, type: {prompt_type}")
-                        # Add format placeholders and additional instructions
-                        # These will be replaced with actual values later
-                        prompt_with_format = prompt.strip() + "\n{count_info}\nVẫn giữ định dạng đánh số như bản gốc (1., 2., ...).\n" \
-                                                              "\nChỉ trả về các dòng dịch được đánh số, không viết thêm bất kỳ nội dung nào khác.\nĐây là văn bản cần chuyển ngữ:\n{text}"
-                        return prompt_with_format
-                    else:
-                        self.main_window.log_message(f"Error: Prompt is empty for {source_lang}, type: {prompt_type}")
-                else:
-                    self.main_window.log_message(f"Error: Prompt type '{prompt_type}' not found in file")
-            else:
-                if 'type' not in df.columns:
-                    self.main_window.log_message("Error: 'type' column not found in prompt file")
-                if source_lang not in df.columns:
-                    self.main_window.log_message(f"Error: Language column '{source_lang}' not found in prompt file")
-                    available_langs = [col for col in df.columns if col not in ['type', 'description']]
-                    self.main_window.log_message(f"Available languages: {', '.join(available_langs)}")
-
-            return None
-
-        except Exception as e:
-            self.main_window.log_message(f"Error loading prompt file: {e}")
-            return None
+        return PromptHelper.load_translation_prompt(
+            input_path,
+            prompt_type,
+            self.main_window.log_message
+        )
 
     def process_with_api(self, input_file, output_file, ai_service, model_name, api_config,
                          batch_size, prompt_type, start_id, stop_id):
@@ -373,7 +287,7 @@ class TranslationProcessor:
             batch_text = "\n".join(batch_lines)
 
             # Format prompt with actual values
-            count_info = f"Source text consists of {len(batch_df)} numbered lines from 1 to {len(batch_df)}."
+            count_info = f"Nội dung bao gồm {len(batch_df)} dòng có đánh số từ 1 đến {len(batch_df)}."
             prompt = prompt_template.format(count_info=count_info, text=batch_text)
 
             # Call appropriate API
