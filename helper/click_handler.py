@@ -118,3 +118,97 @@ def find_and_click(img_path: str, region: Optional[Tuple[int, int, int, int]] = 
             log_func(f"Failed to find {filename} after {max_attempts} attempts")
 
     return None
+
+def ensure_scroll_to_bottom(max_attempts: int = 5, find_indicator: Optional[Tuple[str, float]] = None,
+                            check_stop_func=None, log_func=None):
+    """
+    Ensure page is scrolled to bottom with multiple retry strategies
+
+    Args:
+        max_attempts: Maximum number of scroll attempts
+        find_indicator: Optional - tuple of (image_path, confidence) to verify scroll success
+        check_stop_func: Function to check if should stop
+        log_func: Function to log messages
+
+    Returns:
+        Coordinates (x, y) of indicator if found, True if scrolled (no indicator), False if failed
+    """
+    screen_width, screen_height = pyautogui.size()
+
+    for attempt in range(max_attempts):
+        # Check stop condition
+        if check_stop_func and check_stop_func():
+            return False
+
+        # Try different focus strategies
+        if attempt == 0:
+            # Standard middle click
+            pyautogui.click(screen_width // 2, screen_height // 2)
+        elif attempt == 1:
+            # Click lower to focus on chat area
+            pyautogui.click(screen_width // 2, screen_height * 2 // 3)
+        elif attempt == 2:
+            # Click on left side of chat area
+            pyautogui.click(screen_width // 3, screen_height // 2)
+        elif attempt == 3:
+            # Double click for stronger focus
+            pyautogui.doubleClick(screen_width // 2, screen_height // 2)
+        else:
+            # Last attempt: use Ctrl+End as alternative
+            pyautogui.click(screen_width // 2, screen_height // 2)
+            time.sleep(0.3)
+            pyautogui.hotkey('ctrl', 'end')
+            time.sleep(0.5)
+
+            if find_indicator:
+                image_path, confidence = find_indicator
+                result = find_and_click(
+                    image_path,
+                    click=False,
+                    max_attempts=1,
+                    confidence=confidence,
+                    log_func=None,
+                    check_stop_func=check_stop_func
+                )
+                if result:
+                    if log_func:
+                        log_func(f"Scroll successful with Ctrl+End (attempt {attempt + 1})")
+                    return result
+            else:
+                return True
+            continue
+
+        # Press End key for regular attempts
+        time.sleep(0.3)
+        pyautogui.press('end')
+        time.sleep(0.5)
+        pyautogui.press('end')
+        time.sleep(0.5)
+
+        # Check if indicator is found (if provided)
+        if find_indicator:
+            image_path, confidence = find_indicator
+            result = find_and_click(
+                image_path,
+                click=False,
+                max_attempts=2 if attempt < 3 else 1,
+                delay_between=0.5,
+                confidence=confidence,
+                log_func=None,
+                check_stop_func=check_stop_func
+            )
+            if result:
+                if log_func:
+                    log_func(f"Scroll successful (attempt {attempt + 1})")
+                return result
+        else:
+            # If no indicator, assume success after scroll
+            return False
+
+        # Delay before next attempt
+        if attempt < max_attempts - 1:
+            time.sleep(0.3)
+
+    if log_func:
+        log_func(f"Failed to scroll to bottom after {max_attempts} attempts")
+    return False

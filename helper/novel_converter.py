@@ -10,6 +10,7 @@ import xml.etree.ElementTree as ET
 from urllib.parse import unquote
 import html
 import re
+import pandas as pd
 
 def natural_sort_key(s):
     """
@@ -169,9 +170,52 @@ def generate_output_path(input_path, language):
     os.makedirs(output_dir, exist_ok=True)
     return os.path.join(output_dir, output_filename)
 
+# helper/novel_converter.py
+# Thêm hàm mới để xử lý output format
+
+def save_to_file(all_rows, output_path, log_callback=None):
+    """
+    Save rows to CSV or Excel based on file extension
+    """
+    if not all_rows:
+        if log_callback:
+            log_callback("No content to write")
+        return False
+
+    try:
+        # Create DataFrame
+        df = pd.DataFrame(all_rows, columns=['id', 'text'])
+
+        # Check output format by extension
+        _, ext = os.path.splitext(output_path)
+        ext = ext.lower()
+
+        if ext == '.xlsx' or ext == '.xls':
+            # Save as Excel
+            df.to_excel(output_path, index=False, engine='openpyxl')
+            if log_callback:
+                log_callback(f"Saved as Excel file: {output_path}")
+        else:
+            # Save as CSV (default)
+            with open(output_path, 'w', newline='', encoding='utf-8') as csvfile:
+                csv_writer = csv.writer(csvfile)
+                csv_writer.writerow(['id', 'text'])
+                csv_writer.writerows(all_rows)
+            if log_callback:
+                log_callback(f"Saved as CSV file: {output_path}")
+
+        if log_callback:
+            log_callback(f"Processing completed! Total lines: {len(all_rows)}")
+
+        return True
+    except Exception as e:
+        if log_callback:
+            log_callback(f"Error writing file: {str(e)}")
+        return False
+
 def convert_to_csv(input_path, language, output_path=None, ruby_handling=None, log_callback=None):
     """
-    Convert file or folder to CSV with id and text columns
+    Convert file or folder to CSV/Excel with id and text columns
     """
     if not os.path.exists(input_path):
         if log_callback:
@@ -202,24 +246,12 @@ def convert_to_csv(input_path, language, output_path=None, ruby_handling=None, l
     else:
         all_rows, _ = process_file_to_csv(input_path, language, 1, ruby_handling, log_callback)
 
-    if not all_rows:
-        if log_callback:
-            log_callback("No content to write to CSV")
-        return False, None
+    # Use new save function that supports both CSV and Excel
+    success = save_to_file(all_rows, output_path, log_callback)
 
-    try:
-        with open(output_path, 'w', newline='', encoding='utf-8') as csvfile:
-            csv_writer = csv.writer(csvfile)
-            csv_writer.writerow(['id', 'text'])
-            csv_writer.writerows(all_rows)
-
-        if log_callback:
-            log_callback(f"Processing completed! Total lines: {len(all_rows)}")
-
+    if success:
         return True, output_path
-    except Exception as e:
-        if log_callback:
-            log_callback(f"Error writing CSV: {str(e)}")
+    else:
         return False, None
 
 def process_file_to_csv(file_path, language, current_id=1, ruby_handling=None, log_callback=None):

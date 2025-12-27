@@ -84,10 +84,13 @@ class PromptHelper:
         # Create output filename
         filename_without_ext, ext = os.path.splitext(input_filename)
 
+        # Keep the same extension as input file if it's CSV or Excel
+        output_ext = ext if ext.lower() in ['.csv', '.xlsx', '.xls'] else '.csv'
+
         if prompt_type:
-            output_filename = f"{filename_without_ext}_{prompt_type}_translated{ext}"
+            output_filename = f"{filename_without_ext}_{prompt_type}_translated{output_ext}"
         else:
-            output_filename = f"{filename_without_ext}_translated{ext}"
+            output_filename = f"{filename_without_ext}_translated{output_ext}"
 
         # Create output directory
         output_dir = os.path.join(
@@ -119,14 +122,22 @@ class PromptHelper:
 
     @staticmethod
     def load_existing_results(output_path):
-        """Load and analyze existing output file"""
+        """Load and analyze existing output file (CSV or Excel)"""
         existing_results = {}
         completed_ids = set()
         failed_ids = set()
 
         if os.path.exists(output_path):
             try:
-                existing_df = pd.read_csv(output_path)
+                # Check file extension
+                _, ext = os.path.splitext(output_path)
+                ext = ext.lower()
+
+                if ext in ['.xlsx', '.xls']:
+                    existing_df = pd.read_excel(output_path, engine='openpyxl')
+                else:
+                    existing_df = pd.read_csv(output_path)
+
                 if not existing_df.empty:
                     for _, row in existing_df.iterrows():
                         row_id = row['id']
@@ -158,12 +169,21 @@ class PromptHelper:
 
     @staticmethod
     def save_results(existing_results, output_path):
-        """Save results to CSV file"""
+        """Save results to CSV or Excel file based on extension"""
         if existing_results:
             results_list = list(existing_results.values())
             results_df = pd.DataFrame(results_list)
             results_df_sorted = results_df.sort_values('id')
-            results_df_sorted.to_csv(output_path, index=False)
+
+            # Check output format by extension
+            _, ext = os.path.splitext(output_path)
+            ext = ext.lower()
+
+            if ext in ['.xlsx', '.xls']:
+                results_df_sorted.to_excel(output_path, index=False, engine='openpyxl')
+            else:
+                results_df_sorted.to_csv(output_path, index=False)
+
             return True
         return False
 

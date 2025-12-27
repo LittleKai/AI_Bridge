@@ -2,7 +2,7 @@ import time
 import pyautogui
 import pyperclip
 import re
-from helper.click_handler import find_and_click
+from helper.click_handler import find_and_click, ensure_scroll_to_bottom
 from helper.translation_processor import TranslationProcessor
 
 class WebBotServices:
@@ -15,6 +15,7 @@ class WebBotServices:
     def run_generic_bot(self, service_name, prompt, batch_text, batch_size):
         """Generic bot runner for all AI web services"""
         try:
+            self.running = True
             # Service configuration mapping
             service_config = {
                 'Perplexity': {
@@ -151,6 +152,7 @@ class WebBotServices:
                 self.main_window.status_section.set_bot_status("Bot stopped - Image not found", "red")
                 return None, error_msg
 
+            time.sleep(3)
             # Step 4: Wait for processing to complete
             screen_width, screen_height = pyautogui.size()
             processing_region = (screen_width/2, screen_height - 200, screen_width*3/4, 200)  # Bottom 200px of screen
@@ -179,26 +181,13 @@ class WebBotServices:
                     is_processing = False
                     self.main_window.log_message("Processing completed")
 
-            action_icons = None
-            # Step 5: Scroll to bottom and find copy button
-            for i in range(3):
-                pyautogui.click(screen_width // 2, screen_height // 2)
-                time.sleep(0.3)
-                pyautogui.press('end')
-                time.sleep(0.5)
-                pyautogui.press('end')
-                time.sleep(0.5)
-                # Step 6: Find action icons and copy response
-                action_icons = find_and_click(
-                f"{assets_folder}/{config['action_icons']}",
-                click=False,
-                max_attempts=2,
-                delay_between=0.5,
-                confidence=0.8,
-                return_all_coords=False
-                )
-                if not action_icons:
-                    break
+            # Step 5 & 6: Scroll to bottom and find action icons
+            action_icons = ensure_scroll_to_bottom(
+                max_attempts=5,
+                find_indicator=(f"{assets_folder}/{config['action_icons']}", 0.75),
+                check_stop_func=lambda: not self.running,
+                log_func=self.main_window.log_message
+            )
 
             if not action_icons:
                 error_msg = f"Critical: {service_name} action icons not found! Stopping bot."
@@ -209,7 +198,12 @@ class WebBotServices:
                 return None, error_msg
 
             # Define region around action icons for copy button
-            action_x, action_y = action_icons
+            if isinstance(action_icons, tuple) and len(action_icons) >= 2:
+                action_x, action_y = action_icons[0], action_icons[1]
+            else:
+                # Fallback if return format is different
+                action_x, action_y = action_icons, action_icons
+
             action_region = (action_x - 100, action_y - 100, 200, 200)
 
             copy_result = find_and_click(

@@ -2,7 +2,6 @@ import tkinter as tk
 from tkinter import ttk, filedialog
 import os
 
-
 class TranslationTab:
     """Translation settings tab"""
 
@@ -135,12 +134,16 @@ class TranslationTab:
         input_filename = os.path.basename(self.input_file.get())
         filename_without_ext, ext = os.path.splitext(input_filename)
 
+        # Keep the same extension as input file
+        output_ext = ext if ext.lower() in ['.csv', '.xlsx', '.xls'] else '.csv'
+
         if prompt_type:
-            output_filename = f"{filename_without_ext}_{prompt_type}_translated{ext}"
+            output_filename = f"{filename_without_ext}_{prompt_type}_translated{output_ext}"
         else:
-            output_filename = f"{filename_without_ext}_translated{ext}"
+            output_filename = f"{filename_without_ext}_translated{output_ext}"
 
         self.output_filename_var.set(output_filename)
+
 
     def create_id_range_section(self, parent, row):
         """Create ID range section"""
@@ -160,10 +163,15 @@ class TranslationTab:
         stop_entry.grid(row=0, column=3, sticky=tk.W)
 
     def select_input_file(self):
-        """Select input CSV file"""
+        """Select input CSV or Excel file"""
         filename = filedialog.askopenfilename(
-            title="Select Input CSV",
-            filetypes=[("CSV files", "*.csv"), ("All files", "*.*")]
+            title="Select Input File",
+            filetypes=[
+                ("Supported files", "*.csv *.xlsx *.xls"),
+                ("CSV files", "*.csv"),
+                ("Excel files", "*.xlsx *.xls"),
+                ("All files", "*.*")
+            ]
         )
 
         if filename:

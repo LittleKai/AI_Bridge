@@ -1,10 +1,11 @@
-build_script.py
+#builder.py
 pass_link.txt
 window_settings.json
 AI_Bridge.iml
 .key_store
 bot_settings.json
 settings.json
+key_validator.py
 
 # Ignore specific folders
 0. Temp/
@@ -15,3 +16,4 @@ __pycache__/
 .idea/
 dist/
 build/
+releases/

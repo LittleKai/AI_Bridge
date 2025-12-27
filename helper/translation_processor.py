@@ -6,7 +6,6 @@ from datetime import datetime
 from helper.ai_api_handler import AIAPIHandler
 from helper.prompt_helper import PromptHelper
 
-
 class TranslationProcessor:
     """Handles translation processing using various AI APIs"""
 
@@ -145,17 +144,25 @@ class TranslationProcessor:
             self.main_window.log_message("Error: Failed to load translation prompt")
             return
 
-        # Read input CSV
+        # Read input file (CSV or Excel)
         try:
-            df = pd.read_csv(input_file)
-            self.main_window.log_message(f"Loaded {len(df)} rows from input file")
+            # Check file extension
+            _, ext = os.path.splitext(input_file)
+            ext = ext.lower()
+
+            if ext in ['.xlsx', '.xls']:
+                df = pd.read_excel(input_file, engine='openpyxl')
+                self.main_window.log_message(f"Loaded {len(df)} rows from Excel file")
+            else:
+                df = pd.read_csv(input_file)
+                self.main_window.log_message(f"Loaded {len(df)} rows from CSV file")
 
             # Check required columns
             if 'id' not in df.columns:
-                self.main_window.log_message("Error: CSV file must have 'id' column")
+                self.main_window.log_message("Error: File must have 'id' column")
                 return
             if 'text' not in df.columns:
-                self.main_window.log_message("Error: CSV file must have 'text' column")
+                self.main_window.log_message("Error: File must have 'text' column")
                 self.main_window.log_message(f"Available columns: {', '.join(df.columns)}")
                 return
 

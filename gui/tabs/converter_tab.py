@@ -4,7 +4,6 @@ import threading
 import os
 from pathlib import Path
 
-
 class ConverterTab:
     """
     Tab for converting novel files (TXT, DOCX, EPUB) to CSV format
@@ -36,7 +35,18 @@ class ConverterTab:
         input_frame = ttk.LabelFrame(parent, text="Input", padding=10)
         input_frame.pack(fill=tk.X, pady=(0, 10))
 
-        ttk.Label(input_frame, text="Select File or Folder (Supported formats: TXT, DOCX, EPUB):").pack(anchor=tk.W)
+        # Create a frame for label and format dropdown on same row
+        label_frame = ttk.Frame(input_frame)
+        label_frame.pack(fill=tk.X, pady=(0, 5))
+
+        ttk.Label(label_frame, text="Select Input (Supported: TXT, DOCX, EPUB):").pack(side=tk.LEFT)
+
+        # Add output format dropdown
+        ttk.Label(label_frame, text="Output format:").pack(side=tk.LEFT, padx=(20, 5))
+        self.output_format_var = tk.StringVar(value="Excel")
+        format_combo = ttk.Combobox(label_frame, textvariable=self.output_format_var,
+                                    values=["CSV", "Excel"], state="readonly", width=10)
+        format_combo.pack(side=tk.LEFT)
 
         path_frame = ttk.Frame(input_frame)
         path_frame.pack(fill=tk.X, pady=(5, 0))
@@ -149,9 +159,13 @@ class ConverterTab:
             input_name = os.path.splitext(input_name)[0]
 
         if f"_{language}" in input_name:
-            output_filename = f"{input_name}.csv"
+            base_filename = f"{input_name}"
         else:
-            output_filename = f"{input_name}_{language}.csv"
+            base_filename = f"{input_name}_{language}"
+
+        # Use selected output format
+        extension = ".xlsx" if self.output_format_var.get() == "Excel" else ".csv"
+        output_filename = f"{base_filename}{extension}"
 
         return str(output_dir / output_filename)
 
@@ -251,7 +265,8 @@ class ConverterTab:
         """
         settings = {
             'input_path': self.input_path_var.get(),
-            'language': self.language_var.get()
+            'language': self.language_var.get(),
+            'output_format': self.output_format_var.get()  # Add output format to settings
         }
 
         if self.language_var.get() == "JP":
@@ -267,5 +282,7 @@ class ConverterTab:
             self.input_path_var.set(settings['input_path'])
         if 'language' in settings:
             self.language_var.set(settings['language'])
+        if 'output_format' in settings:  # Load output format
+            self.output_format_var.set(settings['output_format'])
         if 'ruby_handling' in settings and self.language_var.get() == "JP":
             self.ruby_handling_var.set(settings['ruby_handling'])
